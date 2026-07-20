@@ -1,10 +1,15 @@
-local TAMANO = Vector3.new(3, 3, 3)
+local TAMANO_MULTIPLICADOR = 3
+local TAMANO = Vector3.new(TAMANO_MULTIPLICADOR, TAMANO_MULTIPLICADOR, TAMANO_MULTIPLICADOR)
 local TAMANO_ESCUDO = Vector3.new(2, 2, 2.5)
 local TECLA_APAGAR = Enum.KeyCode.F3
 local TECLA_TOGGLE = Enum.KeyCode.F4
 local TECLA_MENU = Enum.KeyCode.F2
 local SCRIPT_ACTIVO = true
 local INCLUIRME = false
+
+-- NUEVAS VARIABLES EXTRAS
+local CHAMS_ACTIVO = false
+local CHAMS_DISTANCIA = 1000
 
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
 local STATUS_URL = "https://raw.githubusercontent.com/elnacho202kw-design/123d/refs/heads/main/status.txt"
@@ -26,13 +31,14 @@ local function estaPermitidoParaJugador(jugador)
 	return jugadoresSeleccionados[jugador.UserId]
 end
 
+-- INTERFAZ GRÁFICA RENOVADA (HUD EXTENDIDO)
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "HitboxSelectorGui"
 ScreenGui.ResetOnSpawn = false
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 240, 0, 320)
+MainFrame.Size = UDim2.new(0, 480, 0, 330) -- Más ancho para alojar las configuraciones
 MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
 MainFrame.BorderSizePixel = 0
@@ -60,16 +66,17 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -10, 1, 0)
 TitleLabel.Position = UDim2.new(0, 10, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Selector de Jugadores"
+TitleLabel.Text = "Panel de Control & Hitboxes"
 TitleLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
 TitleLabel.TextSize = 14
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TitleBar
 
+-- COLUMNA IZQUIERDA: LISTA JUGADORES
 local ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Name = "PlayersScroll"
-ScrollFrame.Size = UDim2.new(1, -16, 1, -45)
+ScrollFrame.Size = UDim2.new(0, 225, 1, -45)
 ScrollFrame.Position = UDim2.new(0, 8, 0, 40)
 ScrollFrame.BackgroundTransparency = 1
 ScrollFrame.BorderSizePixel = 0
@@ -84,6 +91,139 @@ UIList.Parent = ScrollFrame
 
 UIList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 	ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, UIList.AbsoluteContentSize.Y)
+end)
+
+-- COLUMNA DERECHA: CONFIGURACIÓN EXTRA (HUD INTEGRADO)
+local SettingsFrame = Instance.new("Frame")
+SettingsFrame.Name = "SettingsFrame"
+SettingsFrame.Size = UDim2.new(0, 230, 1, -45)
+SettingsFrame.Position = UDim2.new(0, 242, 0, 40)
+SettingsFrame.BackgroundTransparency = 1
+SettingsFrame.Parent = MainFrame
+
+local UISettingsList = Instance.new("UIListLayout")
+UISettingsList.SortOrder = Enum.SortOrder.LayoutOrder
+UISettingsList.Padding = UDim.new(0, 10)
+UISettingsList.Parent = SettingsFrame
+
+-- FUNCION 3: HUD de Estado interno
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, 0, 0, 30)
+StatusLabel.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+StatusLabel.Text = "Estado: ACTIVO | Hitboxes: 0"
+StatusLabel.TextColor3 = Color3.fromRGB(150, 255, 150)
+StatusLabel.Font = Enum.Font.GothamSemibold
+StatusLabel.TextSize = 11
+StatusLabel.Parent = SettingsFrame
+local StatusCorner = Instance.new("UICorner")
+StatusCorner.CornerRadius = UDim.new(0, 6)
+StatusCorner.Parent = StatusLabel
+
+-- FUNCIÓN 1: Botón Toggle Chams (ESP)
+local ChamsBtn = Instance.new("TextButton")
+ChamsBtn.Size = UDim2.new(1, 0, 0, 35)
+ChamsBtn.BackgroundColor3 = Color3.fromRGB(218, 54, 51)
+ChamsBtn.Text = "ESP Chams: DESACTIVADO"
+ChamsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ChamsBtn.Font = Enum.Font.GothamBold
+ChamsBtn.TextSize = 12
+ChamsBtn.Parent = SettingsFrame
+local ChamsCorner = Instance.new("UICorner")
+ChamsCorner.CornerRadius = UDim.new(0, 6)
+ChamsCorner.Parent = ChamsBtn
+
+ChamsBtn.MouseButton1Click:Connect(function()
+	CHAMS_ACTIVO = not CHAMS_ACTIVO
+	if CHAMS_ACTIVO then
+		ChamsBtn.Text = "ESP Chams: ACTIVADO"
+		ChamsBtn.BackgroundColor3 = Color3.fromRGB(46, 160, 67)
+	else
+		ChamsBtn.Text = "ESP Chams: DESACTIVADO"
+		ChamsBtn.BackgroundColor3 = Color3.fromRGB(218, 54, 51)
+	end
+end)
+
+-- FUNCIÓN 1: Input de Distancia ESP
+local DistanciaContainer = Instance.new("Frame")
+DistanciaContainer.Size = UDim2.new(1, 0, 0, 40)
+DistanciaContainer.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+DistanciaContainer.Parent = SettingsFrame
+local DistCorner = Instance.new("UICorner")
+DistCorner.CornerRadius = UDim.new(0, 6)
+DistCorner.Parent = DistanciaContainer
+
+local DistLabel = Instance.new("TextLabel")
+DistLabel.Size = UDim2.new(0.6, 0, 1, 0)
+DistLabel.BackgroundTransparency = 1
+DistLabel.Text = " Distancia Max ESP:"
+DistLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+DistLabel.Font = Enum.Font.GothamSemibold
+DistLabel.TextSize = 11
+DistLabel.TextXAlignment = Enum.TextXAlignment.Left
+DistLabel.Parent = DistanciaContainer
+
+local DistInput = Instance.new("TextBox")
+DistInput.Size = UDim2.new(0.35, 0, 0.7, 0)
+DistInput.Position = UDim2.new(0.6, 0, 0.15, 0)
+DistInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+DistInput.Text = tostring(CHAMS_DISTANCIA)
+DistInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+DistInput.Font = Enum.Font.GothamBold
+DistInput.TextSize = 12
+DistInput.Parent = DistanciaContainer
+local DistInputCorner = Instance.new("UICorner")
+DistInputCorner.CornerRadius = UDim.new(0, 4)
+DistInputCorner.Parent = DistInput
+
+DistInput.FocusLost:Connect(function()
+	local num = tonumber(DistInput.Text)
+	if num and num >= 0 then
+		CHAMS_DISTANCIA = num
+	else
+		DistInput.Text = tostring(CHAMS_DISTANCIA)
+	end
+end)
+
+-- FUNCIÓN 4: Modificador de Tamaño Único (Solo tamaño normal, sin colores/transparencias)
+local SizeContainer = Instance.new("Frame")
+SizeContainer.Size = UDim2.new(1, 0, 0, 40)
+SizeContainer.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+SizeContainer.Parent = SettingsFrame
+local SizeCorner = Instance.new("UICorner")
+SizeCorner.CornerRadius = UDim.new(0, 6)
+SizeCorner.Parent = SizeContainer
+
+local SizeLabel = Instance.new("TextLabel")
+SizeLabel.Size = UDim2.new(0.6, 0, 1, 0)
+SizeLabel.BackgroundTransparency = 1
+SizeLabel.Text = " Tamaño Normal (Hitbox):"
+SizeLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+SizeLabel.Font = Enum.Font.GothamSemibold
+SizeLabel.TextSize = 11
+SizeLabel.TextXAlignment = Enum.TextXAlignment.Left
+SizeLabel.Parent = SizeContainer
+
+local SizeInput = Instance.new("TextBox")
+SizeInput.Size = UDim2.new(0.35, 0, 0.7, 0)
+SizeInput.Position = UDim2.new(0.6, 0, 0.15, 0)
+SizeInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+SizeInput.Text = tostring(TAMANO_MULTIPLICADOR)
+SizeInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+SizeInput.Font = Enum.Font.GothamBold
+SizeInput.TextSize = 12
+SizeInput.Parent = SizeContainer
+local SizeInputCorner = Instance.new("UICorner")
+SizeInputCorner.CornerRadius = UDim.new(0, 4)
+SizeInputCorner.Parent = SizeInput
+
+SizeInput.FocusLost:Connect(function()
+	local num = tonumber(SizeInput.Text)
+	if num and num > 0 then
+		TAMANO_MULTIPLICADOR = num
+		TAMANO = Vector3.new(num, num, num)
+	else
+		SizeInput.Text = tostring(TAMANO_MULTIPLICADOR)
+	end
 end)
 
 pcall(function()
@@ -401,17 +541,18 @@ local function sincronizarVisualUnaVez(head, reg)
 	end
 end
 
--- Limpieza interna al cambiar o morir
 local function limpiarRegistroCabeza(head)
 	local reg = registros[head]
 	if reg then
 		if reg.collider then reg.collider:Destroy() end
 		if reg.fake then reg.fake:Destroy() end
+		if reg.personaje and reg.personaje:FindFirstChild("HitboxESP") then
+			reg.personaje.HitboxESP:Destroy()
+		end
 		registros[head] = nil
 	end
 end
 
--- EJECTA SOLO 1 VEZ AL REINICIAR / RESPAWN / UNIRSE
 local function procesarCargaPersonaje(jugador, personaje)
 	if not SCRIPT_ACTIVO then return end
 	if not INCLUIRME and jugador == jugadorLocal then return end
@@ -485,7 +626,6 @@ Players.PlayerRemoving:Connect(function(jugador)
 	end
 end)
 
--- SEPARADO: Control mínimo de físicas por Frame (Sin recreaciones)
 conexiones[#conexiones + 1] = RunService.Stepped:Connect(function()
 	if not SCRIPT_ACTIVO then return end
 	for head, reg in pairs(registros) do
@@ -498,41 +638,83 @@ conexiones[#conexiones + 1] = RunService.Stepped:Connect(function()
 	end
 end)
 
--- SEPARADO: Cambios de Shield dinámicos estrictamente cada 0.05 segundos
+-- BUCLE FLUIDO DE 0.05 SEGUNDOS (CONTROL DE SHIELD, DINÁMICA DE TAMAÑO Y ESP CHAMS SIMULTÁNEO)
 local acumulado = 0
 conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 	acumulado += dt
 	if acumulado < 0.05 then return end
 	acumulado = 0
 	
-	if not SCRIPT_ACTIVO then return end
+	local totalActivas = 0
+	
+	if SCRIPT_ACTIVO then
+		local miPersonaje = jugadorLocal.Character
+		local myHrp = miPersonaje and miPersonaje:FindFirstChild("HumanoidRootPart")
 
-	for head, reg in pairs(registros) do
-		if not head:IsDescendantOf(workspace) or not reg.personaje.Parent then
-			limpiarRegistroCabeza(head)
-		else
-			if estaPermitidoParaJugador(reg.jugador) then
-				local targetSize = tieneEscudoEquipado(reg.personaje) and TAMANO_ESCUDO or TAMANO
-				if head.Size ~= targetSize then
-					head.Size = targetSize
-				end
-			else
-				-- Si fue desactivado desde la lista GUI en tiempo real, restauramos valores originales
-				if head:IsDescendantOf(workspace) then
-					head.Size = reg.size
-					head.CanCollide = reg.canCollide
-					head.Transparency = reg.transp
-					for d, t in pairs(reg.decals) do
-						if d.Parent then d.Transparency = t end
-					end
-				end
+		for head, reg in pairs(registros) do
+			if not head:IsDescendantOf(workspace) or not reg.personaje.Parent then
 				limpiarRegistroCabeza(head)
+			else
+				if estaPermitidoParaJugador(reg.jugador) then
+					totalActivas += 1
+					
+					-- Ajustador dinámico de tamaño (Normal vs Shield)
+					local targetSize = tieneEscudoEquipado(reg.personaje) and TAMANO_ESCUDO or TAMANO
+					if head.Size ~= targetSize then
+						head.Size = targetSize
+					end
+					
+					-- FUNCIÓN 1: Lógica Ultra-Fluida de Chams sin Lag (Roblox Highlight C++)
+					local hrp = reg.personaje:FindFirstChild("HumanoidRootPart")
+					local dentroDeDistancia = true
+					
+					if myHrp and hrp then
+						dentroDeDistancia = (myHrp.Position - hrp.Position).Magnitude <= CHAMS_DISTANCIA
+					end
+					
+					if CHAMS_ACTIVO and dentroDeDistancia then
+						local hl = reg.personaje:FindFirstChild("HitboxESP")
+						if not hl then
+							hl = Instance.new("Highlight")
+							hl.Name = "HitboxESP"
+							-- Color Rojo pedido
+							hl.FillColor = Color3.fromRGB(255, 0, 0)
+							hl.FillTransparency = 0.5
+							-- Excluye la cabeza gigante ocultando contornos
+							hl.OutlineTransparency = 1 
+							hl.Parent = reg.personaje
+						end
+					else
+						local hl = reg.personaje:FindFirstChild("HitboxESP")
+						if hl then hl:Destroy() end
+					end
+				else
+					-- Restauración en vivo si el jugador es apagado desde la lista
+					if head:IsDescendantOf(workspace) then
+						head.Size = reg.size
+						head.CanCollide = reg.canCollide
+						head.Transparency = reg.transp
+						for d, t in pairs(reg.decals) do
+							if d.Parent then d.Transparency = t end
+						end
+					end
+					limpiarRegistroCabeza(head)
+				end
 			end
 		end
+	else
+		-- Si el script maestro está pausado, limpia todos los chams existentes
+		for _, reg in pairs(registros) do
+			local hl = reg.personaje and reg.personaje:FindFirstChild("HitboxESP")
+			if hl then hl:Destroy() end
+		end
 	end
+	
+	-- FUNCIÓN 3: Actualizar texto dinámico en el HUD del F2
+	StatusLabel.Text = "Estado: " .. (SCRIPT_ACTIVO and "ACTIVO" or "PAUSADO") .. " | Hitboxes: " .. tostring(totalActivas)
+	StatusLabel.TextColor3 = SCRIPT_ACTIVO and Color3.fromRGB(150, 255, 150) or Color3.fromRGB(255, 150, 150)
 end)
 
--- Controladores UI de apagado y restauración
 local function restaurarTodo()
 	for head, stock in pairs(registros) do
 		if head:IsDescendantOf(workspace) then
@@ -545,6 +727,9 @@ local function restaurarTodo()
 		end
 		if stock.collider then stock.collider:Destroy() end
 		if stock.fake then stock.fake:Destroy() end
+		if stock.personaje and stock.personaje:FindFirstChild("HitboxESP") then
+			stock.personaje.HitboxESP:Destroy()
+		end
 	end
 	table.clear(registros)
 end
