@@ -1,6 +1,6 @@
 -- ==========================================
 -- SCRIPT DE HITBOXES OPTIMIZADO
--- Basado en la lógica avanzada de eventos
+-- Basado en la lógica avanzada de eventos y distancia
 -- ==========================================
 
 local function calcularTamanoEscudo(sizeMultiplier)
@@ -97,7 +97,6 @@ enviarEmbedDiscord("📌 Script Ejecutado (Hitbox Optimizado)", 65280)
 local GUI = Instance.new("ScreenGui")
 GUI.Name = "HitboxGUI"
 GUI.ResetOnSpawn = false
--- Usar gethui() si el exploit lo soporta para ocultarlo, sino va a PlayerGui/CoreGui
 local guiParent = (gethui and gethui()) or (pcall(function() return CoreGui end) and CoreGui) or jugadorLocal:WaitForChild("PlayerGui")
 GUI.Parent = guiParent
 
@@ -142,7 +141,6 @@ UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 UIListLayout.Padding = UDim.new(0, 2)
 UIListLayout.Parent = ListaJugadores
 
--- Lógica del Botón On/Off
 ToggleBtn.MouseButton1Click:Connect(function()
 	EXPANSION_ACTIVA = not EXPANSION_ACTIVA
 	if EXPANSION_ACTIVA then
@@ -174,18 +172,16 @@ local function ActualizarListaJugadores()
 	ListaJugadores.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
 end
 
--- Abrir/Cerrar menú con F2
 conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input, procesado)
 	if procesado then return end
 	if input.KeyCode == TECLA_MENU then
 		MenuFrame.Visible = not MenuFrame.Visible
 		if MenuFrame.Visible then
-			ActualizarListaJugadores() -- Solo actualiza cuando se abre
+			ActualizarListaJugadores()
 		end
 	end
 end)
 
--- Detectar unión/salida de jugadores solo para la UI si está abierta
 Players.PlayerAdded:Connect(function()
 	if MenuFrame.Visible then ActualizarListaJugadores() end
 end)
@@ -341,7 +337,7 @@ local function procesarCargaPersonaje(jugador, personaje)
 	head.Size = reg.esEscudo and TAMANO_ESCUDO or TAMANO
 	registros[head] = reg
 
-	-- Detectar escudo dinámicamente notificado por el juego (ChildAdded)
+	-- EVENTOS: El juego nos avisa dinámicamente si agarra o suelta el escudo de la mano
 	conexionesEscudo[personaje] = {}
 	local c1 = personaje.ChildAdded:Connect(function(child)
 		if esObjetoEscudo(child) then reg.esEscudo = true end
@@ -406,13 +402,14 @@ task.spawn(function()
 				if EXPANSION_ACTIVA then
 					local targetSize = TAMANO
 					
-					-- Verifica el escudo, pero si está lejos ignora el escudo para no achicar la hitbox
+					-- DISTANCIA: Verifica si tiene escudo. Si está a más de 1000 studs, IGNORA el achique.
 					if reg.esEscudo then
 						if myPos then
 							local distancia = (head.Position - myPos).Magnitude
 							if distancia <= 1000 then
-								targetSize = TAMANO_ESCUDO
+								targetSize = TAMANO_ESCUDO -- Se achica porque está cerca y tiene escudo
 							end
+							-- Si es mayor a 1000, targetSize se queda en TAMANO (grande)
 						else
 							targetSize = TAMANO_ESCUDO -- Por seguridad si nuestro personaje no existe
 						end
@@ -422,14 +419,13 @@ task.spawn(function()
 					if visualEscalaConSize(head) and head.Transparency ~= 1 then head.Transparency = 1 end
 					if reg.fake and reg.fake.Parent == nil then reg.fake.Parent = head.Parent end
 				else
-					-- Restaurar estado natural si se apagó el hitbox desde la interfaz (F2)
 					if head.Size ~= reg.size then head.Size = reg.size end
 					if visualEscalaConSize(head) and head.Transparency ~= reg.transp then head.Transparency = reg.transp end
 					if reg.fake and reg.fake.Parent ~= nil then reg.fake.Parent = nil end
 				end
 			end
 		end
-		task.wait(0.05) -- Equivalente a 20 comprobaciones por segundo
+		task.wait(0.05)
 	end
 end)
 
