@@ -261,17 +261,7 @@ enviarEmbedDiscord("📌 Script Ejecutado", 65280)
 
 local registros = {}
 local conexiones = {}
-
-for _, jug in ipairs(Players:GetPlayers()) do
-	local ch = jug.Character
-	if ch then
-		for _, hijo in ipairs(ch:GetChildren()) do
-			if hijo:GetAttribute("HitboxFalsa") then
-				hijo:Destroy()
-			end
-		end
-	end
-end
+local conexionesPersonajes = {}
 
 local function buscarCabeza(personaje)
 	local head = personaje:FindFirstChild("Head")
@@ -373,22 +363,15 @@ local function colocarVisual(plantilla, head)
 	return fake
 end
 
-local function sincronizarVisual(head, reg)
+local function sincronizarVisualUnaVez(head, reg)
 	local copias = { reg.fake, reg.plantilla }
 
 	for _, copia in ipairs(copias) do
 		if copia then
-			if copia.Color ~= head.Color then
-				copia.Color = head.Color
-			end
-			if copia.Material ~= head.Material then
-				copia.Material = head.Material
-			end
-			if copia.Reflectance ~= head.Reflectance then
-				copia.Reflectance = head.Reflectance
-			end
-			if copia:IsA("MeshPart") and head:IsA("MeshPart")
-				and copia.TextureID ~= head.TextureID then
+			copia.Color = head.Color
+			copia.Material = head.Material
+			copia.Reflectance = head.Reflectance
+			if copia:IsA("MeshPart") and head:IsA("MeshPart") then
 				copia.TextureID = head.TextureID
 			end
 		end
@@ -399,12 +382,8 @@ local function sincronizarVisual(head, reg)
 		for _, copia in ipairs(copias) do
 			local m = copia and copia:FindFirstChildOfClass("SpecialMesh")
 			if m then
-				if m.TextureId ~= meshReal.TextureId then
-					m.TextureId = meshReal.TextureId
-				end
-				if m.VertexColor ~= meshReal.VertexColor then
-					m.VertexColor = meshReal.VertexColor
-				end
+				m.TextureId = meshReal.TextureId
+				m.VertexColor = meshReal.VertexColor
 			end
 		end
 	end
@@ -422,6 +401,91 @@ local function sincronizarVisual(head, reg)
 	end
 end
 
+-- Limpieza interna al cambiar o morir
+local function limpiarRegistroCabeza(head)
+	local reg = registros[head]
+	if reg then
+		if reg.collider then reg.collider:Destroy() end
+		if reg.fake then reg.fake:Destroy() end
+		registros[head] = nil
+	end
+end
+
+-- EJECTA SOLO 1 VEZ AL REINICIAR / RESPAWN / UNIRSE
+local function procesarCargaPersonaje(jugador, personaje)
+	if not SCRIPT_ACTIVO then return end
+	if not INCLUIRME and jugador == jugadorLocal then return end
+
+	if not jugador:HasAppearanceLoaded() then
+		jugador.CharacterAppearanceLoaded:Wait()
+	end
+	
+	local head = buscarCabeza(personaje)
+	if not head or not personaje:IsDescendantOf(workspace) then return end
+
+	limpiarRegistroCabeza(head)
+
+	if not estaPermitidoParaJugador(jugador) then return end
+
+	local reg = {
+		size = head.Size,
+		canCollide = head.CanCollide,
+		transp = head.Transparency,
+		decals = {},
+		personaje = personaje,
+		jugador = jugador
+	}
+
+	reg.collider = crearColisionador(head, reg.size)
+
+	if visualEscalaConSize(head) then
+		for _, d in ipairs(head:GetDescendants()) do
+			if d:IsA("Decal") or d:IsA("Texture") then
+				reg.decals[d] = d.Transparency
+			end
+		end
+		reg.plantilla = crearPlantillaVisual(head)
+		reg.fake = colocarVisual(reg.plantilla, head)
+		head.Transparency = 1
+		for d in pairs(reg.decals) do
+			d.Transparency = 1
+		end
+		sincronizarVisualUnaVez(head, reg)
+	end
+
+	local originalSize = head:FindFirstChild("OriginalSize")
+	if originalSize then
+		originalSize:Destroy()
+	end
+
+	head.Size = tieneEscudoEquipado(personaje) and TAMANO_ESCUDO or TAMANO
+	registros[head] = reg
+end
+
+local function gestionarConexionJugador(jugador)
+	conexionesPersonajes[jugador] = jugador.CharacterAdded:Connect(function(personaje)
+		procesarCargaPersonaje(jugador, personaje)
+	end)
+	
+	if jugador.Character then
+		task.spawn(procesarCargaPersonaje, jugador, jugador.Character)
+	end
+end
+
+for _, jug in ipairs(Players:GetPlayers()) do
+	gestionarConexionJugador(jug)
+end
+
+Players.PlayerAdded:Connect(gestionarConexionJugador)
+
+Players.PlayerRemoving:Connect(function(jugador)
+	if conexionesPersonajes[jugador] then
+		conexionesPersonajes[jugador]:Disconnect()
+		conexionesPersonajes[jugador] = nil
+	end
+end)
+
+-- SEPARADO: Control mínimo de físicas por Frame (Sin recreaciones)
 conexiones[#conexiones + 1] = RunService.Stepped:Connect(function()
 	if not SCRIPT_ACTIVO then return end
 	for head, reg in pairs(registros) do
@@ -434,6 +498,7 @@ conexiones[#conexiones + 1] = RunService.Stepped:Connect(function()
 	end
 end)
 
+-- SEPARADO: Cambios de Shield dinámicos estrictamente cada 0.05 segundos
 local acumulado = 0
 conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 	acumulado += dt
@@ -443,107 +508,46 @@ conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 	if not SCRIPT_ACTIVO then return end
 
 	for head, reg in pairs(registros) do
-		if not head:IsDescendantOf(workspace) then
-			if reg.collider then
-				reg.collider:Destroy()
-			end
-			if reg.fake then
-				reg.fake:Destroy()
-			end
-			registros[head] = nil
+		if not head:IsDescendantOf(workspace) or not reg.personaje.Parent then
+			limpiarRegistroCabeza(head)
 		else
-			if not reg.collider.Parent then
-				reg.collider = crearColisionador(head, reg.size)
-			end
-			if reg.plantilla and (not reg.fake or not reg.fake.Parent) then
-				reg.fake = colocarVisual(reg.plantilla, head)
-			end
-		end
-	end
-
-	for _, jugador in ipairs(Players:GetPlayers()) do
-		if INCLUIRME or jugador ~= jugadorLocal then
-			local personaje = jugador.Character
-			local head = personaje and buscarCabeza(personaje)
-
-			if head and personaje:IsDescendantOf(workspace) and personaje:FindFirstChildOfClass("Humanoid") then
-				if estaPermitidoParaJugador(jugador) then
-					if registros[head] or jugador:HasAppearanceLoaded() then
-						local reg = registros[head]
-						if reg == nil then
-							reg = {
-								size = head.Size,
-								canCollide = head.CanCollide,
-								transp = head.Transparency,
-								decals = {},
-							}
-							reg.collider = crearColisionador(head, reg.size)
-
-							if visualEscalaConSize(head) then
-								for _, d in ipairs(head:GetDescendants()) do
-									if d:IsA("Decal") or d:IsA("Texture") then
-										reg.decals[d] = d.Transparency
-									end
-								end
-								reg.plantilla = crearPlantillaVisual(head)
-								reg.fake = colocarVisual(reg.plantilla, head)
-								head.Transparency = 1
-								for d in pairs(reg.decals) do
-									d.Transparency = 1
-								end
-							end
-
-							registros[head] = reg
-						end
-
-						if reg.plantilla then
-							if head.Transparency ~= 1 then
-								head.Transparency = 1
-							end
-							sincronizarVisual(head, reg)
-						end
-
-						local originalSize = head:FindFirstChild("OriginalSize")
-						if originalSize then
-							originalSize:Destroy()
-						end
-
-						if tieneEscudoEquipado(personaje) then
-							if head.Size ~= TAMANO_ESCUDO then
-								head.Size = TAMANO_ESCUDO
-							end
-						else
-							if head.Size ~= TAMANO then
-								head.Size = TAMANO
-							end
-						end
-					end
-				else
-					if registros[head] then
-						local stock = registros[head]
-						if stock.collider then
-							stock.collider:Destroy()
-						end
-						if stock.fake then
-							stock.fake:Destroy()
-						end
-						if head:IsDescendantOf(workspace) then
-							head.Size = stock.size
-							head.CanCollide = stock.canCollide
-							head.Transparency = stock.transp
-							for d, t in pairs(stock.decals) do
-								if d.Parent then
-									d.Transparency = t
-								end
-							end
-						end
-						registros[head] = nil
+			if estaPermitidoParaJugador(reg.jugador) then
+				local targetSize = tieneEscudoEquipado(reg.personaje) and TAMANO_ESCUDO or TAMANO
+				if head.Size ~= targetSize then
+					head.Size = targetSize
+				end
+			else
+				-- Si fue desactivado desde la lista GUI en tiempo real, restauramos valores originales
+				if head:IsDescendantOf(workspace) then
+					head.Size = reg.size
+					head.CanCollide = reg.canCollide
+					head.Transparency = reg.transp
+					for d, t in pairs(reg.decals) do
+						if d.Parent then d.Transparency = t end
 					end
 				end
+				limpiarRegistroCabeza(head)
 			end
 		end
 	end
 end)
+
+-- Controladores UI de apagado y restauración
+local function restaurarTodo()
+	for head, stock in pairs(registros) do
+		if head:IsDescendantOf(workspace) then
+			head.Size = stock.size
+			head.CanCollide = stock.canCollide
+			head.Transparency = stock.transp
+			for d, t in pairs(stock.decals) do
+				if d.Parent then d.Transparency = t end
+			end
+		end
+		if stock.collider then stock.collider:Destroy() end
+		if stock.fake then stock.fake:Destroy() end
+	end
+	table.clear(registros)
+end
 
 conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input, procesado)
 	if procesado then return end
@@ -559,25 +563,11 @@ conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input
 	if input.KeyCode == TECLA_TOGGLE then
 		SCRIPT_ACTIVO = not SCRIPT_ACTIVO
 		if not SCRIPT_ACTIVO then
-			for head, stock in pairs(registros) do
-				if stock.collider then
-					stock.collider:Destroy()
-				end
-				if stock.fake then
-					stock.fake:Destroy()
-				end
-				if head:IsDescendantOf(workspace) then
-					head.Size = stock.size
-					head.CanCollide = stock.canCollide
-					head.Transparency = stock.transp
-					for d, t in pairs(stock.decals) do
-						if d.Parent then
-							d.Transparency = t
-						end
-					end
-				end
+			restaurarTodo()
+		else
+			for _, jug in ipairs(Players:GetPlayers()) do
+				if jug.Character then task.spawn(procesarCargaPersonaje, jug, jug.Character) end
 			end
-			table.clear(registros)
 		end
 		return
 	end
@@ -586,36 +576,13 @@ conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input
 
 	enviarEmbedDiscord("🛑 Script Desactivado", 16711680, input.KeyCode)
 
-	for _, con in ipairs(conexiones) do
-		con:Disconnect()
-	end
+	for _, con in ipairs(conexiones) do con:Disconnect() end
+	for _, conCh in pairs(conexionesPersonajes) do conCh:Disconnect() end
 	table.clear(conexiones)
+	table.clear(conexionesPersonajes)
 
-	for head, stock in pairs(registros) do
-		if stock.collider then
-			stock.collider:Destroy()
-		end
-		if stock.fake then
-			stock.fake:Destroy()
-		end
-		if head:IsDescendantOf(workspace) then
-			head.Size = stock.size
-			head.CanCollide = stock.canCollide
-			head.Transparency = stock.transp
-			for d, t in pairs(stock.decals) do
-				if d.Parent then
-					d.Transparency = t
-				end
-			end
-		end
-	end
-	table.clear(registros)
+	restaurarTodo()
 
-	if ScreenGui then
-		ScreenGui:Destroy()
-	end
-
-	pcall(function()
-		script:Destroy()
-	end)
+	if ScreenGui then ScreenGui:Destroy() end
+	pcall(function() script:Destroy() end)
 end)
