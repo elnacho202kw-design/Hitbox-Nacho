@@ -1,94 +1,263 @@
 local TAMANO = Vector3.new(3, 3, 3)
 local TAMANO_ESCUDO = Vector3.new(2, 2, 2.5)
 local TECLA_APAGAR = Enum.KeyCode.F3
+local TECLA_TOGGLE = Enum.KeyCode.F4
+local TECLA_MENU = Enum.KeyCode.F2
+local SCRIPT_ACTIVO = true
 local INCLUIRME = false
+
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
+local STATUS_URL = "https://raw.githubusercontent.com/elnacho202kw-design/123d/refs/heads/main/status.txt"
+local WEBHOOK_EXACTO = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local MarketService = game:GetService("MarketplaceService")
 
 local jugadorLocal = Players.LocalPlayer
+local jugadoresSeleccionados = {}
 
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
-local STATUS_URL = "https://raw.githubusercontent.com/elnacho202kw-design/123d/refs/heads/main/status.txt"
+local function estaPermitidoParaJugador(jugador)
+	if jugadoresSeleccionados[jugador.UserId] == nil then
+		return true
+	end
+	return jugadoresSeleccionados[jugador.UserId]
+end
 
-local Players = game:GetService("Players")
-local jugadorLocal = Players.LocalPlayer
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "HitboxSelectorGui"
+ScreenGui.ResetOnSpawn = false
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 240, 0, 320)
+MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+MainFrame.BorderSizePixel = 0
+MainFrame.Visible = false
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 8)
+MainCorner.Parent = MainFrame
+
+local TitleBar = Instance.new("Frame")
+TitleBar.Name = "TitleBar"
+TitleBar.Size = UDim2.new(1, 0, 0, 35)
+TitleBar.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = TitleBar
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -10, 1, 0)
+TitleLabel.Position = UDim2.new(0, 10, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "Selector de Jugadores"
+TitleLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
+TitleLabel.TextSize = 14
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TitleBar
+
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Name = "PlayersScroll"
+ScrollFrame.Size = UDim2.new(1, -16, 1, -45)
+ScrollFrame.Position = UDim2.new(0, 8, 0, 40)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.ScrollBarThickness = 4
+ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 70)
+ScrollFrame.Parent = MainFrame
+
+local UIList = Instance.new("UIListLayout")
+UIList.SortOrder = Enum.SortOrder.LayoutOrder
+UIList.Padding = UDim.new(0, 5)
+UIList.Parent = ScrollFrame
+
+UIList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, UIList.AbsoluteContentSize.Y)
+end)
+
+pcall(function()
+	if gethui then
+		ScreenGui.Parent = gethui()
+	elseif syn and syn.protect_gui then
+		syn.protect_gui(ScreenGui)
+		ScreenGui.Parent = game:GetService("CoreGui")
+	else
+		ScreenGui.Parent = jugadorLocal:WaitForChild("PlayerGui")
+	end
+end)
+
+local function crearFilaJugador(jugador)
+	local pFrame = Instance.new("Frame")
+	pFrame.Name = "Player_" .. tostring(jugador.UserId)
+	pFrame.Size = UDim2.new(1, 0, 0, 30)
+	pFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+	pFrame.BorderSizePixel = 0
+	pFrame.Parent = ScrollFrame
+
+	local RowCorner = Instance.new("UICorner")
+	RowCorner.CornerRadius = UDim.new(0, 6)
+	RowCorner.Parent = pFrame
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Size = UDim2.new(0.65, -5, 1, 0)
+	nameLabel.Position = UDim2.new(0, 8, 0, 0)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = jugador.DisplayName
+	nameLabel.TextColor3 = Color3.fromRGB(210, 210, 215)
+	nameLabel.TextSize = 12
+	nameLabel.Font = Enum.Font.GothamSemibold
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+	nameLabel.Parent = pFrame
+
+	local btnToggle = Instance.new("TextButton")
+	btnToggle.Size = UDim2.new(0.3, 0, 0.75, 0)
+	btnToggle.Position = UDim2.new(0.68, 0, 0.125, 0)
+	btnToggle.BorderSizePixel = 0
+	btnToggle.Font = Enum.Font.GothamBold
+	btnToggle.TextSize = 11
+	btnToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btnToggle.Parent = pFrame
+
+	local BtnCorner = Instance.new("UICorner")
+	BtnCorner.CornerRadius = UDim.new(0, 4)
+	BtnCorner.Parent = btnToggle
+
+	local function actualizarEstadoBoton()
+		local activo = estaPermitidoParaJugador(jugador)
+		btnToggle.Text = activo and "ON" or "OFF"
+		btnToggle.BackgroundColor3 = activo and Color3.fromRGB(46, 160, 67) or Color3.fromRGB(218, 54, 51)
+	end
+
+	btnToggle.MouseButton1Click:Connect(function()
+		local estadoActual = estaPermitidoParaJugador(jugador)
+		jugadoresSeleccionados[jugador.UserId] = not estadoActual
+		actualizarEstadoBoton()
+	end)
+
+	actualizarEstadoBoton()
+end
+
+local function regenerarLista()
+	for _, child in ipairs(ScrollFrame:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+
+	for _, jug in ipairs(Players:GetPlayers()) do
+		if jug ~= jugadorLocal then
+			crearFilaJugador(jug)
+		end
+	end
+end
+
+Players.PlayerAdded:Connect(function(jugador)
+	if jugador ~= jugadorLocal then
+		crearFilaJugador(jugador)
+	end
+end)
+
+Players.PlayerRemoving:Connect(function(jugador)
+	jugadoresSeleccionados[jugador.UserId] = nil
+	local fila = ScrollFrame:FindFirstChild("Player_" .. tostring(jugador.UserId))
+	if fila then
+		fila:Destroy()
+	end
+end)
+
+regenerarLista()
 
 local function obtenerEstadoRemoto()
-    local estado = "off"
-    pcall(function()
-        estado = string.lower(string.gsub(game:HttpGet(STATUS_URL), "%s+", ""))
-    end)
-    return estado
+	local estado = "off"
+	pcall(function()
+		estado = string.lower(string.gsub(game:HttpGet(STATUS_URL), "%s+", ""))
+	end)
+	return estado
 end
 
 if obtenerEstadoRemoto() ~= "on" then
-    return
+	return
 end
 
-local WEBHOOK_EXACTO = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
-
 local function validarWebhook(url)
-    return url == WEBHOOK_EXACTO
+	return url == WEBHOOK_EXACTO
 end
 
 if not validarWebhook(WEBHOOK_URL) then
-    return
+	return
 end
 
-local function notificarDiscord()
-    local HttpService = game:GetService("HttpService")
-    local MarketService = game:GetService("MarketplaceService")
-    
-    local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
-    if not httpRequest then return end
+local function enviarEmbedDiscord(titulo, colorHex, teclaUsada)
+	local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
+	if not httpRequest then return end
 
-    local nombreJuego = "Desconocido"
-    pcall(function()
-        local info = MarketService:GetProductInfo(game.PlaceId)
-        if info and info.Name then
-            nombreJuego = info.Name
-        end
-    end)
+	local nombreJuego = "Desconocido"
+	pcall(function()
+		local info = MarketService:GetProductInfo(game.PlaceId)
+		if info and info.Name then
+			nombreJuego = info.Name
+		end
+	end)
 
-    local datos = {
-        ["embeds"] = {{
-            ["title"] = "📌 Script Ejecutado",
-            ["color"] = 65280,
-            ["fields"] = {
-                {
-                    ["name"] = "Usuario",
-                    ["value"] = jugadorLocal.Name,
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "Juego",
-                    ["value"] = nombreJuego .. " (" .. tostring(game.PlaceId) .. ")",
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "Momento",
-                    ["value"] = os.date("%Y-%m-%d %H:%M:%S") .. " (UTC)",
-                    ["inline"] = false
-                }
-            }
-        }}
-    }
+	local fields = {
+		{
+			["name"] = "Usuario",
+			["value"] = jugadorLocal.Name,
+			["inline"] = true
+		},
+		{
+			["name"] = "Juego",
+			["value"] = nombreJuego .. " (" .. tostring(game.PlaceId) .. ")",
+			["inline"] = true
+		},
+		{
+			["name"] = "Momento",
+			["value"] = os.date("%Y-%m-%d %H:%M:%S") .. " (UTC)",
+			["inline"] = false
+		}
+	}
 
-    task.spawn(function()
-        pcall(function()
-            httpRequest({
-                Url = WEBHOOK_URL,
-                Method = "POST",
-                Headers = {["Content-Type"] = "application/json"},
-                Body = HttpService:JSONEncode(datos)
-            })
-        end)
-    end)
+	if teclaUsada then
+		table.insert(fields, {
+			["name"] = "Tecla de Cierre",
+			["value"] = tostring(teclaUsada.Name),
+			["inline"] = true
+		})
+	end
+
+	local datos = {
+		["embeds"] = {{
+			["title"] = titulo,
+			["color"] = colorHex,
+			["fields"] = fields
+		}}
+	}
+
+	task.spawn(function()
+		pcall(function()
+			httpRequest({
+				Url = WEBHOOK_URL,
+				Method = "POST",
+				Headers = {["Content-Type"] = "application/json"},
+				Body = HttpService:JSONEncode(datos)
+			})
+		end)
+	end)
 end
 
-notificarDiscord()
+enviarEmbedDiscord("📌 Script Ejecutado", 65280)
 
 local registros = {}
 local conexiones = {}
@@ -124,6 +293,17 @@ local function visualEscalaConSize(head)
 end
 
 local function tieneEscudoEquipado(personaje)
+	local miPersonaje = jugadorLocal.Character
+	local miHrp = miPersonaje and miPersonaje:FindFirstChild("HumanoidRootPart")
+	local otroHrp = personaje and personaje:FindFirstChild("HumanoidRootPart")
+
+	if miHrp and otroHrp then
+		local distancia = (miHrp.Position - otroHrp.Position).Magnitude
+		if distancia > 1000 then
+			return false
+		end
+	end
+	
 	for _, objeto in ipairs(personaje:GetChildren()) do
 		if objeto:IsA("Tool") then
 			local nombre = string.lower(objeto.Name)
@@ -243,6 +423,7 @@ local function sincronizarVisual(head, reg)
 end
 
 conexiones[#conexiones + 1] = RunService.Stepped:Connect(function()
+	if not SCRIPT_ACTIVO then return end
 	for head, reg in pairs(registros) do
 		if head.CanCollide then
 			head.CanCollide = false
@@ -258,6 +439,8 @@ conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 	acumulado += dt
 	if acumulado < 0.05 then return end
 	acumulado = 0
+	
+	if not SCRIPT_ACTIVO then return end
 
 	for head, reg in pairs(registros) do
 		if not head:IsDescendantOf(workspace) then
@@ -283,55 +466,78 @@ conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 			local personaje = jugador.Character
 			local head = personaje and buscarCabeza(personaje)
 
-			if head and personaje:IsDescendantOf(workspace) and personaje:FindFirstChildOfClass("Humanoid")
-				and (registros[head] or jugador:HasAppearanceLoaded()) then
+			if head and personaje:IsDescendantOf(workspace) and personaje:FindFirstChildOfClass("Humanoid") then
+				if estaPermitidoParaJugador(jugador) then
+					if registros[head] or jugador:HasAppearanceLoaded() then
+						local reg = registros[head]
+						if reg == nil then
+							reg = {
+								size = head.Size,
+								canCollide = head.CanCollide,
+								transp = head.Transparency,
+								decals = {},
+							}
+							reg.collider = crearColisionador(head, reg.size)
 
-				local reg = registros[head]
-				if reg == nil then
-					reg = {
-						size = head.Size,
-						canCollide = head.CanCollide,
-						transp = head.Transparency,
-						decals = {},
-					}
-					reg.collider = crearColisionador(head, reg.size)
+							if visualEscalaConSize(head) then
+								for _, d in ipairs(head:GetDescendants()) do
+									if d:IsA("Decal") or d:IsA("Texture") then
+										reg.decals[d] = d.Transparency
+									end
+								end
+								reg.plantilla = crearPlantillaVisual(head)
+								reg.fake = colocarVisual(reg.plantilla, head)
+								head.Transparency = 1
+								for d in pairs(reg.decals) do
+									d.Transparency = 1
+								end
+							end
 
-					if visualEscalaConSize(head) then
-						for _, d in ipairs(head:GetDescendants()) do
-							if d:IsA("Decal") or d:IsA("Texture") then
-								reg.decals[d] = d.Transparency
+							registros[head] = reg
+						end
+
+						if reg.plantilla then
+							if head.Transparency ~= 1 then
+								head.Transparency = 1
+							end
+							sincronizarVisual(head, reg)
+						end
+
+						local originalSize = head:FindFirstChild("OriginalSize")
+						if originalSize then
+							originalSize:Destroy()
+						end
+
+						if tieneEscudoEquipado(personaje) then
+							if head.Size ~= TAMANO_ESCUDO then
+								head.Size = TAMANO_ESCUDO
+							end
+						else
+							if head.Size ~= TAMANO then
+								head.Size = TAMANO
 							end
 						end
-						reg.plantilla = crearPlantillaVisual(head)
-						reg.fake = colocarVisual(reg.plantilla, head)
-						head.Transparency = 1
-						for d in pairs(reg.decals) do
-							d.Transparency = 1
-						end
-					end
-
-					registros[head] = reg
-				end
-
-				if reg.plantilla then
-					if head.Transparency ~= 1 then
-						head.Transparency = 1
-					end
-					sincronizarVisual(head, reg)
-				end
-
-				local originalSize = head:FindFirstChild("OriginalSize")
-				if originalSize then
-					originalSize:Destroy()
-				end
-
-				if tieneEscudoEquipado(personaje) then
-					if head.Size ~= TAMANO_ESCUDO then
-						head.Size = TAMANO_ESCUDO
 					end
 				else
-					if head.Size ~= TAMANO then
-						head.Size = TAMANO
+					if registros[head] then
+						local stock = registros[head]
+						if stock.collider then
+							stock.collider:Destroy()
+						end
+						if stock.fake then
+							stock.fake:Destroy()
+						end
+						if head:IsDescendantOf(workspace) then
+							head.Size = stock.size
+							head.CanCollide = stock.canCollide
+							head.Transparency = stock.transp
+							for d, t in pairs(stock.decals) do
+								if d.Parent then
+									d.Transparency = t
+								end
+							end
+						end
+						registros[head] = nil
 					end
 				end
 			end
@@ -341,7 +547,44 @@ end)
 
 conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input, procesado)
 	if procesado then return end
+
+	if input.KeyCode == TECLA_MENU then
+		MainFrame.Visible = not MainFrame.Visible
+		if MainFrame.Visible then
+			regenerarLista()
+		end
+		return
+	end
+	
+	if input.KeyCode == TECLA_TOGGLE then
+		SCRIPT_ACTIVO = not SCRIPT_ACTIVO
+		if not SCRIPT_ACTIVO then
+			for head, stock in pairs(registros) do
+				if stock.collider then
+					stock.collider:Destroy()
+				end
+				if stock.fake then
+					stock.fake:Destroy()
+				end
+				if head:IsDescendantOf(workspace) then
+					head.Size = stock.size
+					head.CanCollide = stock.canCollide
+					head.Transparency = stock.transp
+					for d, t in pairs(stock.decals) do
+						if d.Parent then
+							d.Transparency = t
+						end
+					end
+				end
+			end
+			table.clear(registros)
+		end
+		return
+	end
+		
 	if input.KeyCode ~= TECLA_APAGAR then return end
+
+	enviarEmbedDiscord("🛑 Script Desactivado", 16711680, input.KeyCode)
 
 	for _, con in ipairs(conexiones) do
 		con:Disconnect()
@@ -367,6 +610,10 @@ conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input
 		end
 	end
 	table.clear(registros)
+
+	if ScreenGui then
+		ScreenGui:Destroy()
+	end
 
 	pcall(function()
 		script:Destroy()
