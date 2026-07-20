@@ -199,7 +199,7 @@ local function ActualizarListaJugadores()
 		txt.Size = UDim2.new(0.65, -5, 1, 0)
 		txt.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 		txt.TextColor3 = Color3.fromRGB(200, 200, 200)
-		txt.Text = " " .. jug.Name
+		txt.Text = " " .. jug.DisplayName
 		txt.TextXAlignment = Enum.TextXAlignment.Left
 		txt.Font = Enum.Font.SourceSans
 		txt.TextSize = 14
