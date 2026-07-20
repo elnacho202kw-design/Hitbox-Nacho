@@ -28,10 +28,30 @@ local TRIGGER_ACTIVO = false
 local TRIGGER_REACCION = 100 
 local TRIGGER_DELAY = 1000 
 
+-- NUEVAS VARIABLES GLOBALES
+local TEAM_CHECK_ACTIVO = false
+
+local FLY_ACTIVO = false
+local FLY_SPEED = 50
+local FLY_SMOOTHNESS = 0.5
+
+local NOCLIP_ACTIVO = false
+
+local AIM_ACTIVO = false
+local AIM_MODOS = {"Aimlock", "Aimbot", "Aim Assist"}
+local AIM_MODO_ACTUAL = 1
+local AIM_FOV = 150
+local AIM_SMOOTHNESS = 5
+local AIM_SPEED = 20
+local MOSTRAR_FOV = false
+
 local BINDS = {
 	Hitbox = Enum.KeyCode.F4,
 	Chams = nil,
-	Trigger = nil
+	Trigger = nil,
+	Fly = nil,
+	Noclip = nil,
+	Aim = nil
 }
 
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
@@ -49,7 +69,11 @@ local jugadorLocal = Players.LocalPlayer
 local jugadoresSeleccionados = {}
 local conexiones = {}
 
+-- SE MODIFICÓ ESTA FUNCIÓN PARA INCLUIR EL TEAM CHECK
 local function estaPermitidoParaJugador(jugador)
+	if TEAM_CHECK_ACTIVO and jugadorLocal.Team and jugador.Team == jugadorLocal.Team then
+		return false
+	end
 	if jugadoresSeleccionados[jugador.UserId] == nil then
 		return true
 	end
@@ -60,9 +84,26 @@ local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "HitboxSelectorGui"
 ScreenGui.ResetOnSpawn = false
 
+-- FOV CIRCLE GUI
+local FOVCircle = Instance.new("Frame")
+FOVCircle.Size = UDim2.new(0, AIM_FOV * 2, 0, AIM_FOV * 2)
+FOVCircle.Position = UDim2.new(0.5, -AIM_FOV, 0.5, -AIM_FOV)
+FOVCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+FOVCircle.BackgroundTransparency = 1
+FOVCircle.Visible = false
+local FOVCorner = Instance.new("UICorner")
+FOVCorner.CornerRadius = UDim.new(1, 0)
+FOVCorner.Parent = FOVCircle
+local FOVStroke = Instance.new("UIStroke")
+FOVStroke.Color = Color3.fromRGB(255, 255, 255)
+FOVStroke.Thickness = 1
+FOVStroke.Parent = FOVCircle
+FOVCircle.Parent = ScreenGui
+
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 520, 0, 440) 
+-- Agrandado horizontalmente (de 520 a 800)
+MainFrame.Size = UDim2.new(0, 800, 0, 480) 
 MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
 MainFrame.BorderSizePixel = 0
@@ -87,36 +128,18 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -10, 1, 0)
 TitleLabel.Position = UDim2.new(0, 10, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Panel de Control & Hitboxes"
+TitleLabel.Text = "Panel de Control & Hitboxes Avanzado"
 TitleLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
 TitleLabel.TextSize = 14
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TitleBar
 
-local ScrollFrame = Instance.new("ScrollingFrame")
-ScrollFrame.Name = "PlayersScroll"
-ScrollFrame.Size = UDim2.new(0, 225, 1, -45)
-ScrollFrame.Position = UDim2.new(0, 8, 0, 40)
-ScrollFrame.BackgroundTransparency = 1
-ScrollFrame.BorderSizePixel = 0
-ScrollFrame.ScrollBarThickness = 4
-ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 70)
-ScrollFrame.Parent = MainFrame
-
-local UIList = Instance.new("UIListLayout")
-UIList.SortOrder = Enum.SortOrder.LayoutOrder
-UIList.Padding = UDim.new(0, 5)
-UIList.Parent = ScrollFrame
-
-UIList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-	ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, UIList.AbsoluteContentSize.Y)
-end)
-
+-- COLUMNA 1: SETTINGS / TOGGLES
 local SettingsFrame = Instance.new("ScrollingFrame")
 SettingsFrame.Name = "SettingsFrame"
-SettingsFrame.Size = UDim2.new(0, 260, 1, -45)
-SettingsFrame.Position = UDim2.new(0, 250, 0, 40)
+SettingsFrame.Size = UDim2.new(0, 250, 1, -45)
+SettingsFrame.Position = UDim2.new(0, 10, 0, 40)
 SettingsFrame.BackgroundTransparency = 1
 SettingsFrame.BorderSizePixel = 0
 SettingsFrame.ScrollBarThickness = 4
@@ -132,6 +155,57 @@ UISettingsList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function(
 	SettingsFrame.CanvasSize = UDim2.new(0, 0, 0, UISettingsList.AbsoluteContentSize.Y)
 end)
 
+-- COLUMNA 2: VALORES / SLIDERS
+local ValuesFrame = Instance.new("ScrollingFrame")
+ValuesFrame.Name = "ValuesFrame"
+ValuesFrame.Size = UDim2.new(0, 260, 1, -45)
+ValuesFrame.Position = UDim2.new(0, 270, 0, 40)
+ValuesFrame.BackgroundTransparency = 1
+ValuesFrame.BorderSizePixel = 0
+ValuesFrame.ScrollBarThickness = 4
+ValuesFrame.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 70)
+ValuesFrame.Parent = MainFrame
+
+local UIValuesList = Instance.new("UIListLayout")
+UIValuesList.SortOrder = Enum.SortOrder.LayoutOrder
+UIValuesList.Padding = UDim.new(0, 8)
+UIValuesList.Parent = ValuesFrame
+
+UIValuesList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	ValuesFrame.CanvasSize = UDim2.new(0, 0, 0, UIValuesList.AbsoluteContentSize.Y)
+end)
+
+-- COLUMNA 3: PLAYERS SCROLL Y FOOTER
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Name = "PlayersScroll"
+ScrollFrame.Size = UDim2.new(0, 250, 1, -65)
+ScrollFrame.Position = UDim2.new(0, 540, 0, 40)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.ScrollBarThickness = 4
+ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 70)
+ScrollFrame.Parent = MainFrame
+
+local UIList = Instance.new("UIListLayout")
+UIList.SortOrder = Enum.SortOrder.LayoutOrder
+UIList.Padding = UDim.new(0, 5)
+UIList.Parent = ScrollFrame
+
+UIList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, UIList.AbsoluteContentSize.Y)
+end)
+
+local FooterLabel = Instance.new("TextLabel")
+FooterLabel.Size = UDim2.new(0, 250, 0, 20)
+FooterLabel.Position = UDim2.new(0, 540, 1, -25)
+FooterLabel.BackgroundTransparency = 1
+FooterLabel.Text = "echo por nacho"
+FooterLabel.TextColor3 = Color3.fromRGB(130, 130, 130)
+FooterLabel.TextSize = 11
+FooterLabel.Font = Enum.Font.GothamSemibold
+FooterLabel.Parent = MainFrame
+
+-- ESTADO LABEL EN VALUES
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, -5, 0, 30)
 StatusLabel.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
@@ -139,22 +213,21 @@ StatusLabel.Text = "Estado: ACTIVO | Hitboxes: 0"
 StatusLabel.TextColor3 = Color3.fromRGB(150, 255, 150)
 StatusLabel.Font = Enum.Font.GothamSemibold
 StatusLabel.TextSize = 11
-StatusLabel.Parent = SettingsFrame
+StatusLabel.Parent = ValuesFrame
 Instance.new("UICorner", StatusLabel).CornerRadius = UDim.new(0, 6)
 
 local esperandoTeclaPara = nil
 
--- CORRECCIÓN DEL BUG AQUI: La función ahora acciona todo como un clic real
-local function CrearToggleConBinds(textoDefault, colorON, colorOFF, estadoInicial, funcionAlPresionar, keyIndex)
+local function CrearToggleConBinds(textoDefault, colorON, colorOFF, estadoInicial, funcionAlPresionar, keyIndex, ParentContainer)
 	local Container = Instance.new("Frame")
 	Container.Size = UDim2.new(1, -5, 0, 35)
 	Container.BackgroundTransparency = 1
-	Container.Parent = SettingsFrame
+	Container.Parent = ParentContainer or SettingsFrame
 
 	local Btn = Instance.new("TextButton")
 	Btn.Size = UDim2.new(0.72, 0, 1, 0)
 	Btn.BackgroundColor3 = estadoInicial and colorON or colorOFF
-	Btn.Text = textoDefault .. ": " .. (estadoInicial and "ACTIVADO" or "DESACTIVADO")
+	Btn.Text = textoDefault .. ": " .. (estadoInicial and "ON" or "OFF")
 	Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	Btn.Font = Enum.Font.GothamBold
 	Btn.TextSize = 11
@@ -172,15 +245,13 @@ local function CrearToggleConBinds(textoDefault, colorON, colorOFF, estadoInicia
 	KeyBtn.Parent = Container
 	Instance.new("UICorner", KeyBtn).CornerRadius = UDim.new(0, 6)
 
-	-- Esta función se encarga de cambiar el estado REAL y VISUAL a la vez
 	local function alternarEstado()
 		local nuevoEstado = funcionAlPresionar()
-		Btn.Text = textoDefault .. ": " .. (nuevoEstado and "ACTIVADO" or "DESACTIVADO")
+		Btn.Text = textoDefault .. ": " .. (nuevoEstado and "ON" or "OFF")
 		Btn.BackgroundColor3 = nuevoEstado and colorON or colorOFF
 		return nuevoEstado
 	end
 
-	-- Al hacer clic hace lo mismo que al tocar la tecla
 	Btn.MouseButton1Click:Connect(alternarEstado)
 
 	KeyBtn.MouseButton1Click:Connect(function()
@@ -195,6 +266,29 @@ local function CrearToggleConBinds(textoDefault, colorON, colorOFF, estadoInicia
 	return alternarEstado, updateKeyUI
 end
 
+local function CrearBotonSimple(texto, estado, parent, callback)
+	local Container = Instance.new("Frame")
+	Container.Size = UDim2.new(1, -5, 0, 35)
+	Container.BackgroundTransparency = 1
+	Container.Parent = parent
+
+	local Btn = Instance.new("TextButton")
+	Btn.Size = UDim2.new(1, 0, 1, 0)
+	Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+	Btn.Text = texto .. ": " .. estado
+	Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	Btn.Font = Enum.Font.GothamBold
+	Btn.TextSize = 11
+	Btn.Parent = Container
+	Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
+
+	Btn.MouseButton1Click:Connect(function()
+		local nuevoText = callback()
+		Btn.Text = texto .. ": " .. nuevoText
+	end)
+end
+
+-- TOGGLES IZQUIERDA
 local UpdateToggleHitbox, UpdateKeyHitbox = CrearToggleConBinds("Hitbox", Color3.fromRGB(46, 160, 67), Color3.fromRGB(218, 54, 51), SCRIPT_ACTIVO, function()
 	SCRIPT_ACTIVO = not SCRIPT_ACTIVO
 	if not SCRIPT_ACTIVO then
@@ -217,11 +311,34 @@ local UpdateToggleTrigger, UpdateKeyTrigger = CrearToggleConBinds("Triggerbot", 
 	return TRIGGER_ACTIVO
 end, "Trigger")
 
+-- TEAM CHECK TOGGLE (Sin Bind)
+local UpdateToggleTeamCheck, _ = CrearToggleConBinds("Team Check", Color3.fromRGB(46, 160, 67), Color3.fromRGB(218, 54, 51), TEAM_CHECK_ACTIVO, function()
+	TEAM_CHECK_ACTIVO = not TEAM_CHECK_ACTIVO
+	return TEAM_CHECK_ACTIVO
+end, "NONE", SettingsFrame)
+
+-- NUEVOS TOGGLES
+local UpdateToggleFly, UpdateKeyFly = CrearToggleConBinds("Fly", Color3.fromRGB(46, 160, 67), Color3.fromRGB(218, 54, 51), FLY_ACTIVO, function()
+	FLY_ACTIVO = not FLY_ACTIVO
+	return FLY_ACTIVO
+end, "Fly")
+
+local UpdateToggleNoclip, UpdateKeyNoclip = CrearToggleConBinds("Noclip", Color3.fromRGB(46, 160, 67), Color3.fromRGB(218, 54, 51), NOCLIP_ACTIVO, function()
+	NOCLIP_ACTIVO = not NOCLIP_ACTIVO
+	return NOCLIP_ACTIVO
+end, "Noclip")
+
+local UpdateToggleAim, UpdateKeyAim = CrearToggleConBinds("Aim", Color3.fromRGB(46, 160, 67), Color3.fromRGB(218, 54, 51), AIM_ACTIVO, function()
+	AIM_ACTIVO = not AIM_ACTIVO
+	return AIM_ACTIVO
+end, "Aim")
+
+
 local function CrearInputTextUI(texto, defaultValor, callbackStrToInt)
 	local Container = Instance.new("Frame")
 	Container.Size = UDim2.new(1, -5, 0, 35)
 	Container.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
-	Container.Parent = SettingsFrame
+	Container.Parent = ValuesFrame
 	Instance.new("UICorner", Container).CornerRadius = UDim.new(0, 6)
 
 	local Lbl = Instance.new("TextLabel")
@@ -251,6 +368,7 @@ local function CrearInputTextUI(texto, defaultValor, callbackStrToInt)
 	end)
 end
 
+-- VALORES ORIGINALES
 CrearInputTextUI("Reacción (ms):", TRIGGER_REACCION, function(str)
 	local n = tonumber(str)
 	if n and n >= 0 then TRIGGER_REACCION = n end
@@ -279,10 +397,61 @@ CrearInputTextUI("Tamaño Hitbox:", TAMANO_MULTIPLICADOR, function(str)
 	return TAMANO_MULTIPLICADOR
 end)
 
+CrearInputTextUI("Transparencia ESP:", CHAMS_TRANSPARENCIA, function(str)
+	local num = tonumber(str)
+	if num then 
+		CHAMS_TRANSPARENCIA = math.clamp(num, 0, 1)
+	end
+	return CHAMS_TRANSPARENCIA
+end)
+
+-- NUEVOS VALORES (FLY, AIM)
+CrearInputTextUI("Fly Velocidad:", FLY_SPEED, function(str)
+	local n = tonumber(str)
+	if n then FLY_SPEED = n end
+	return FLY_SPEED
+end)
+
+CrearInputTextUI("Fly Suavidad:", FLY_SMOOTHNESS, function(str)
+	local n = tonumber(str)
+	if n then FLY_SMOOTHNESS = n end
+	return FLY_SMOOTHNESS
+end)
+
+CrearInputTextUI("Aim FOV:", AIM_FOV, function(str)
+	local n = tonumber(str)
+	if n then AIM_FOV = n end
+	return AIM_FOV
+end)
+
+CrearInputTextUI("Aim Velocidad:", AIM_SPEED, function(str)
+	local n = tonumber(str)
+	if n then AIM_SPEED = n end
+	return AIM_SPEED
+end)
+
+CrearInputTextUI("Aim Suavidad:", AIM_SMOOTHNESS, function(str)
+	local n = tonumber(str)
+	if n then AIM_SMOOTHNESS = n end
+	return AIM_SMOOTHNESS
+end)
+
+CrearBotonSimple("Modo Aim", AIM_MODOS[AIM_MODO_ACTUAL], ValuesFrame, function()
+	AIM_MODO_ACTUAL = AIM_MODO_ACTUAL + 1
+	if AIM_MODO_ACTUAL > #AIM_MODOS then AIM_MODO_ACTUAL = 1 end
+	return AIM_MODOS[AIM_MODO_ACTUAL]
+end)
+
+local _, _ = CrearToggleConBinds("Mostrar Mira/FOV", Color3.fromRGB(46, 160, 67), Color3.fromRGB(218, 54, 51), MOSTRAR_FOV, function()
+	MOSTRAR_FOV = not MOSTRAR_FOV
+	return MOSTRAR_FOV
+end, "NONE", ValuesFrame)
+
+-- PICKER DE COLOR ORIGINAL
 local ColorContainer = Instance.new("Frame")
 ColorContainer.Size = UDim2.new(1, -5, 0, 35)
 ColorContainer.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
-ColorContainer.Parent = SettingsFrame
+ColorContainer.Parent = ValuesFrame
 Instance.new("UICorner", ColorContainer).CornerRadius = UDim.new(0, 6)
 
 local ColorLabel = Instance.new("TextLabel")
@@ -358,14 +527,6 @@ UserInputService.InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		isPickingColor = false
 	end
-end)
-
-CrearInputTextUI("Transparencia ESP:", CHAMS_TRANSPARENCIA, function(str)
-	local num = tonumber(str)
-	if num then 
-		CHAMS_TRANSPARENCIA = math.clamp(num, 0, 1)
-	end
-	return CHAMS_TRANSPARENCIA
 end)
 
 
@@ -666,11 +827,33 @@ pcall(function()
 	game:BindToClose(function() procesarSalidaAbrupta(); task.wait(0.5) end)
 end)
 
+local colisionesParedesNoclip = {}
+
 conexiones[#conexiones + 1] = RunService.Stepped:Connect(function()
 	if not SCRIPT_ACTIVO then return end
 	for head, reg in pairs(registros) do
 		if head.CanCollide then head.CanCollide = false end
 		if reg.collider and reg.collider.Parent and not reg.collider.CanCollide then reg.collider.CanCollide = true end
+	end
+	
+	-- LÓGICA DE NOCLIP (Traspasar todas las paredes, menos el suelo)
+	for pared, _ in pairs(colisionesParedesNoclip) do
+		if pared and pared.Parent then pared.CanCollide = true end
+	end
+	table.clear(colisionesParedesNoclip)
+	
+	if NOCLIP_ACTIVO and jugadorLocal.Character and jugadorLocal.Character:FindFirstChild("HumanoidRootPart") then
+		local hrp = jugadorLocal.Character.HumanoidRootPart
+		local moveDir = (jugadorLocal.Character:FindFirstChild("Humanoid") and jugadorLocal.Character.Humanoid.MoveDirection) or Vector3.zero
+		if moveDir.Magnitude > 0 then
+			local ray = Ray.new(hrp.Position, moveDir * 4) -- Rayo corto frente al movimiento
+			local hit, pos, normal = workspace:FindPartOnRay(ray, jugadorLocal.Character)
+			-- Si detecta una parte y la normal (Y) indica que es una pared (casi vertical), la traspasa
+			if hit and math.abs(normal.Y) < 0.3 then 
+				hit.CanCollide = false
+				colisionesParedesNoclip[hit] = true
+			end
+		end
 	end
 end)
 
@@ -748,23 +931,107 @@ local function ejecutarClick()
 	end
 end
 
+-- LÓGICA DE OBTENER TARGET PARA EL AIM
+local function GetClosestTarget()
+	local mousePos = UserInputService:GetMouseLocation()
+	local closest = nil
+	local shortestDist = AIM_FOV
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= jugadorLocal and estaPermitidoParaJugador(player) then
+			local char = player.Character
+			if char and char:FindFirstChild("Head") and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+				local pos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(char.Head.Position)
+				if onScreen and pos.Z > 0 then
+					local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+					-- PRIORIDAD: El que esté más cerca del centro del FOV (shortestDist)
+					if dist < shortestDist then
+						shortestDist = dist
+						closest = char.Head
+					end
+				end
+			end
+		end
+	end
+	return closest
+end
+
 conexiones[#conexiones + 1] = RunService.RenderStepped:Connect(function()
+	local cam = workspace.CurrentCamera
+	local mousePos = UserInputService:GetMouseLocation()
+	
+	-- 1. LÓGICA DEL FOV CIRCLE
+	if MOSTRAR_FOV and SCRIPT_ACTIVO then
+		FOVCircle.Size = UDim2.new(0, AIM_FOV * 2, 0, AIM_FOV * 2)
+		FOVCircle.Position = UDim2.new(0, mousePos.X - AIM_FOV, 0, mousePos.Y - AIM_FOV)
+		FOVCircle.Visible = true
+	else
+		FOVCircle.Visible = false
+	end
+
+	-- 2. LÓGICA DE FLY
+	if FLY_ACTIVO and SCRIPT_ACTIVO and jugadorLocal.Character and jugadorLocal.Character:FindFirstChild("HumanoidRootPart") then
+		local hrp = jugadorLocal.Character.HumanoidRootPart
+		local moveVector = Vector3.new()
+		pcall(function()
+			moveVector = require(jugadorLocal.PlayerScripts.PlayerModule):GetControls():GetMoveVector()
+		end)
+		
+		local targetVelocity = (cam.CFrame.RightVector * moveVector.X + cam.CFrame.LookVector * -moveVector.Z + cam.CFrame.UpVector * moveVector.Y) * FLY_SPEED
+		
+		-- Controles básicos de vuelo extra si no detecta moveVector
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then targetVelocity += cam.CFrame.LookVector * FLY_SPEED end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then targetVelocity -= cam.CFrame.LookVector * FLY_SPEED end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then targetVelocity -= cam.CFrame.RightVector * FLY_SPEED end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then targetVelocity += cam.CFrame.RightVector * FLY_SPEED end
+		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then targetVelocity += Vector3.new(0, FLY_SPEED, 0) end
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then targetVelocity -= Vector3.new(0, FLY_SPEED, 0) end
+
+		hrp.Velocity = hrp.Velocity:Lerp(targetVelocity, FLY_SMOOTHNESS / 10)
+		if jugadorLocal.Character:FindFirstChild("Humanoid") then
+			jugadorLocal.Character.Humanoid.PlatformStand = true
+		end
+	else
+		-- Desactivar vuelo de forma segura
+		if jugadorLocal.Character and jugadorLocal.Character:FindFirstChild("Humanoid") and jugadorLocal.Character.Humanoid.PlatformStand then
+			jugadorLocal.Character.Humanoid.PlatformStand = false
+		end
+	end
+
+	-- 3. LÓGICA DE AIM
+	if AIM_ACTIVO and SCRIPT_ACTIVO then
+		local target = GetClosestTarget()
+		if target then
+			local currentCFrame = cam.CFrame
+			local lookAtCFrame = CFrame.new(currentCFrame.Position, target.Position)
+			
+			local currentMode = AIM_MODOS[AIM_MODO_ACTUAL]
+			if currentMode == "Aimlock" then
+				cam.CFrame = currentCFrame:Lerp(lookAtCFrame, AIM_SPEED / 100)
+			elseif currentMode == "Aimbot" then
+				cam.CFrame = currentCFrame:Lerp(lookAtCFrame, AIM_SMOOTHNESS / 100)
+			elseif currentMode == "Aim Assist" then
+				-- Se mueve solo una fracción ligerísima para ayudar mientras apuntas
+				cam.CFrame = currentCFrame:Lerp(lookAtCFrame, (AIM_SMOOTHNESS / 500))
+			end
+		end
+	end
+
+	-- 4. LÓGICA DE TRIGGERBOT
 	if not TRIGGER_ACTIVO or not SCRIPT_ACTIVO then
 		was_hovering = false
 		return
 	end
 
 	local is_hovering = false
-	local camera = workspace.CurrentCamera
-	local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+	local center = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
 
 	for head, reg in pairs(registros) do
 		if head:IsDescendantOf(workspace) and estaPermitidoParaJugador(reg.jugador) then
 			local hrp = reg.personaje and reg.personaje:FindFirstChild("HumanoidRootPart")
 			if hrp then
-				local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
+				local screenPos, onScreen = cam:WorldToViewportPoint(head.Position)
 				if onScreen and screenPos.Z > 0 then
-					local offsetPos = camera:WorldToViewportPoint(head.Position + camera.CFrame.UpVector * (head.Size.Y / 2))
+					local offsetPos = cam:WorldToViewportPoint(head.Position + cam.CFrame.UpVector * (head.Size.Y / 2))
 					local radius = math.abs(screenPos.Y - offsetPos.Y)
 					local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
 
@@ -807,6 +1074,7 @@ local function restaurarTodo()
 		if stock.personaje and stock.personaje:FindFirstChild("HitboxESP") then stock.personaje.HitboxESP:Destroy() end
 	end
 	table.clear(registros)
+	if FOVCircle then FOVCircle:Destroy() end
 end
 _G.restaurarTodo = restaurarTodo
 
@@ -818,12 +1086,18 @@ conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input
 				BINDS[esperandoTeclaPara] = nil
 				if esperandoTeclaPara == "Hitbox" then UpdateKeyHitbox(nil)
 				elseif esperandoTeclaPara == "Chams" then UpdateKeyChams(nil)
-				elseif esperandoTeclaPara == "Trigger" then UpdateKeyTrigger(nil) end
+				elseif esperandoTeclaPara == "Trigger" then UpdateKeyTrigger(nil)
+				elseif esperandoTeclaPara == "Fly" then UpdateKeyFly(nil)
+				elseif esperandoTeclaPara == "Noclip" then UpdateKeyNoclip(nil)
+				elseif esperandoTeclaPara == "Aim" then UpdateKeyAim(nil) end
 			elseif key ~= Enum.KeyCode.Unknown then
 				BINDS[esperandoTeclaPara] = key
 				if esperandoTeclaPara == "Hitbox" then UpdateKeyHitbox(key)
 				elseif esperandoTeclaPara == "Chams" then UpdateKeyChams(key)
-				elseif esperandoTeclaPara == "Trigger" then UpdateKeyTrigger(key) end
+				elseif esperandoTeclaPara == "Trigger" then UpdateKeyTrigger(key)
+				elseif esperandoTeclaPara == "Fly" then UpdateKeyFly(key)
+				elseif esperandoTeclaPara == "Noclip" then UpdateKeyNoclip(key)
+				elseif esperandoTeclaPara == "Aim" then UpdateKeyAim(key) end
 			end
 			esperandoTeclaPara = nil
 		end
@@ -838,16 +1112,12 @@ conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input
 		return
 	end
 	
-	-- AQUÍ OCURRE LA MAGIA DEL FIX: Usamos la función que hace lo mismo que el clic.
-	if BINDS.Hitbox and input.KeyCode == BINDS.Hitbox then
-		UpdateToggleHitbox()
-	end
-	if BINDS.Chams and input.KeyCode == BINDS.Chams then
-		UpdateToggleChams()
-	end
-	if BINDS.Trigger and input.KeyCode == BINDS.Trigger then
-		UpdateToggleTrigger()
-	end
+	if BINDS.Hitbox and input.KeyCode == BINDS.Hitbox then UpdateToggleHitbox() end
+	if BINDS.Chams and input.KeyCode == BINDS.Chams then UpdateToggleChams() end
+	if BINDS.Trigger and input.KeyCode == BINDS.Trigger then UpdateToggleTrigger() end
+	if BINDS.Fly and input.KeyCode == BINDS.Fly then UpdateToggleFly() end
+	if BINDS.Noclip and input.KeyCode == BINDS.Noclip then UpdateToggleNoclip() end
+	if BINDS.Aim and input.KeyCode == BINDS.Aim then UpdateToggleAim() end
 		
 	if input.KeyCode ~= TECLA_APAGAR then return end
 	SCRIPT_ACTIVO = false
