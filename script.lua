@@ -21,6 +21,7 @@ local TAMANO_ESCUDO = calcularTamanoEscudo(TAMANO_MULTIPLICADOR)
 local TECLA_APAGAR = Enum.KeyCode.F3
 local TECLA_MENU = Enum.KeyCode.F2
 local SCRIPT_ACTIVO = true
+local EXPANSION_ACTIVA = true -- Controlado por el botón On/Off del menú
 local INCLUIRME = false
 
 local Players = game:GetService("Players")
@@ -28,13 +29,13 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 local MarketService = game:GetService("MarketplaceService")
+local CoreGui = game:GetService("CoreGui")
 
 local jugadorLocal = Players.LocalPlayer
 local conexiones = {}
 local conexionesPersonajes = {}
 local conexionesEscudo = {}
 local registros = {}
-local jugadoresActivos = {} -- Diccionario para guardar qué jugadores tienen la hitbox activada
 
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
 local STATUS_URL = "https://raw.githubusercontent.com/elnacho202kw-design/123d/refs/heads/main/status.txt"
@@ -96,45 +97,41 @@ enviarEmbedDiscord("📌 Script Ejecutado (Hitbox Optimizado)", 65280)
 local GUI = Instance.new("ScreenGui")
 GUI.Name = "HitboxGUI"
 GUI.ResetOnSpawn = false
-
--- MÉTODO A PRUEBA DE FALLOS PARA CARGAR EL MENÚ
-local guiParent
-if gethui then
-	guiParent = gethui()
-else
-	local success, core = pcall(function() return game:GetService("CoreGui") end)
-	if success and core then
-		guiParent = core
-	else
-		guiParent = jugadorLocal:FindFirstChild("PlayerGui") or jugadorLocal:WaitForChild("PlayerGui")
-	end
-end
+-- Usar gethui() si el exploit lo soporta para ocultarlo, sino va a PlayerGui/CoreGui
+local guiParent = (gethui and gethui()) or (pcall(function() return CoreGui end) and CoreGui) or jugadorLocal:WaitForChild("PlayerGui")
 GUI.Parent = guiParent
 
 local MenuFrame = Instance.new("Frame")
-MenuFrame.Size = UDim2.new(0, 300, 0, 400)
-MenuFrame.Position = UDim2.new(0.5, -150, 0.5, -200)
+MenuFrame.Size = UDim2.new(0, 250, 0, 350)
+MenuFrame.Position = UDim2.new(0.5, -125, 0.5, -175)
 MenuFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 MenuFrame.BorderSizePixel = 0
 MenuFrame.Visible = false
-MenuFrame.Active = true
 MenuFrame.Parent = GUI
 
 local Titulo = Instance.new("TextLabel")
-Titulo.Size = UDim2.new(1, 0, 0, 35)
+Titulo.Size = UDim2.new(1, 0, 0, 30)
 Titulo.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 Titulo.TextColor3 = Color3.fromRGB(255, 255, 255)
-Titulo.Text = " Hitbox Menu Individual (F2)"
-Titulo.TextXAlignment = Enum.TextXAlignment.Left
+Titulo.Text = "Hitbox Menu (F2)"
 Titulo.Font = Enum.Font.SourceSansBold
 Titulo.TextSize = 18
 Titulo.BorderSizePixel = 0
-Titulo.Active = true -- Importante para arrastrar
 Titulo.Parent = MenuFrame
 
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(0.9, 0, 0, 35)
+ToggleBtn.Position = UDim2.new(0.05, 0, 0, 40)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.Text = "Hitbox: ON"
+ToggleBtn.Font = Enum.Font.SourceSansBold
+ToggleBtn.TextSize = 16
+ToggleBtn.Parent = MenuFrame
+
 local ListaJugadores = Instance.new("ScrollingFrame")
-ListaJugadores.Size = UDim2.new(0.9, 0, 1, -50)
-ListaJugadores.Position = UDim2.new(0.05, 0, 0, 45)
+ListaJugadores.Size = UDim2.new(0.9, 0, 1, -95)
+ListaJugadores.Position = UDim2.new(0.05, 0, 0, 85)
 ListaJugadores.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 ListaJugadores.BorderSizePixel = 0
 ListaJugadores.ScrollBarThickness = 5
@@ -142,97 +139,37 @@ ListaJugadores.Parent = MenuFrame
 
 local UIListLayout = Instance.new("UIListLayout")
 UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-UIListLayout.Padding = UDim.new(0, 5)
+UIListLayout.Padding = UDim.new(0, 2)
 UIListLayout.Parent = ListaJugadores
 
--- ==========================================
--- LÓGICA DE ARRASTRE (FIJADA AL TÍTULO PARA EVITAR ERRORES)
--- ==========================================
-local dragging = false
-local dragInput, dragStart, startPos
-
-Titulo.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		dragging = true
-		dragStart = input.Position
-		startPos = MenuFrame.Position
-
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
-			end
-		end)
+-- Lógica del Botón On/Off
+ToggleBtn.MouseButton1Click:Connect(function()
+	EXPANSION_ACTIVA = not EXPANSION_ACTIVA
+	if EXPANSION_ACTIVA then
+		ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+		ToggleBtn.Text = "Hitbox: ON"
+	else
+		ToggleBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+		ToggleBtn.Text = "Hitbox: OFF"
 	end
 end)
 
-Titulo.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-		dragInput = input
-	end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-	if input == dragInput and dragging then
-		local delta = input.Position - dragStart
-		MenuFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-	end
-end)
-
--- ==========================================
--- ACTUALIZACIÓN DE LISTA DE JUGADORES
--- ==========================================
 local function ActualizarListaJugadores()
 	for _, child in ipairs(ListaJugadores:GetChildren()) do
-		if child:IsA("Frame") then child:Destroy() end
+		if child:IsA("TextLabel") then child:Destroy() end
 	end
 	
 	local jugadores = Players:GetPlayers()
 	for _, jug in ipairs(jugadores) do
-		if jug == jugadorLocal and not INCLUIRME then continue end
-		
-		local row = Instance.new("Frame")
-		row.Size = UDim2.new(1, 0, 0, 30)
-		row.BackgroundTransparency = 1
-		row.Parent = ListaJugadores
-		
 		local txt = Instance.new("TextLabel")
-		txt.Size = UDim2.new(0.65, -5, 1, 0)
+		txt.Size = UDim2.new(1, 0, 0, 25)
 		txt.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 		txt.TextColor3 = Color3.fromRGB(200, 200, 200)
-		txt.Text = " " .. jug.DisplayName
-		txt.TextXAlignment = Enum.TextXAlignment.Left
+		txt.Text = jug.Name
 		txt.Font = Enum.Font.SourceSans
 		txt.TextSize = 14
 		txt.BorderSizePixel = 0
-		txt.Parent = row
-		
-		local toggleBtn = Instance.new("TextButton")
-		toggleBtn.Size = UDim2.new(0.35, 0, 1, 0)
-		toggleBtn.Position = UDim2.new(0.65, 5, 0, 0)
-		
-		-- Por defecto se considera activo (true) si no está definido en el diccionario
-		local isActive = (jugadoresActivos[jug.UserId] ~= false)
-		
-		toggleBtn.BackgroundColor3 = isActive and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
-		toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-		toggleBtn.Text = isActive and "ON" or "OFF"
-		toggleBtn.Font = Enum.Font.SourceSansBold
-		toggleBtn.TextSize = 14
-		toggleBtn.BorderSizePixel = 0
-		toggleBtn.Parent = row
-		
-		toggleBtn.MouseButton1Click:Connect(function()
-			local estadoActual = (jugadoresActivos[jug.UserId] ~= false)
-			jugadoresActivos[jug.UserId] = not estadoActual -- Alterna el estado
-			
-			if jugadoresActivos[jug.UserId] then
-				toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-				toggleBtn.Text = "ON"
-			else
-				toggleBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-				toggleBtn.Text = "OFF"
-			end
-		end)
+		txt.Parent = ListaJugadores
 	end
 	ListaJugadores.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
 end
@@ -252,8 +189,7 @@ end)
 Players.PlayerAdded:Connect(function()
 	if MenuFrame.Visible then ActualizarListaJugadores() end
 end)
-Players.PlayerRemoving:Connect(function(jugador)
-	jugadoresActivos[jugador.UserId] = nil -- Limpiar memoria
+Players.PlayerRemoving:Connect(function()
 	if MenuFrame.Visible then ActualizarListaJugadores() end
 end)
 
@@ -402,14 +338,7 @@ local function procesarCargaPersonaje(jugador, personaje)
 	local originalSize = head:FindFirstChild("OriginalSize")
 	if originalSize then originalSize:Destroy() end
 
-	-- Asegura el tamaño de inmediato en base a si tiene o no el hitbox individual encendido
-	local jugadorActivo = (jugadoresActivos[jugador.UserId] ~= false)
-	if jugadorActivo then
-		head.Size = reg.esEscudo and TAMANO_ESCUDO or TAMANO
-	else
-		head.Size = reg.size
-	end
-	
+	head.Size = reg.esEscudo and TAMANO_ESCUDO or TAMANO
 	registros[head] = reg
 
 	-- Detectar escudo dinámicamente notificado por el juego (ChildAdded)
@@ -453,10 +382,7 @@ end)
 conexiones[#conexiones + 1] = RunService.Stepped:Connect(function()
 	if not SCRIPT_ACTIVO then return end
 	for head, reg in pairs(registros) do
-		-- Verifica si este jugador en específico tiene la hitbox activada
-		local jugadorActivo = (jugadoresActivos[reg.jugador.UserId] ~= false) 
-		
-		if jugadorActivo then
+		if EXPANSION_ACTIVA then
 			if head.CanCollide then head.CanCollide = false end
 			if reg.collider and reg.collider.Parent and not reg.collider.CanCollide then reg.collider.CanCollide = true end
 		else
@@ -477,9 +403,7 @@ task.spawn(function()
 			if not head:IsDescendantOf(workspace) or not reg.personaje.Parent then
 				limpiarRegistroCabeza(head)
 			else
-				local jugadorActivo = (jugadoresActivos[reg.jugador.UserId] ~= false)
-				
-				if jugadorActivo then
+				if EXPANSION_ACTIVA then
 					local targetSize = TAMANO
 					
 					-- Verifica el escudo, pero si está lejos ignora el escudo para no achicar la hitbox
@@ -498,7 +422,7 @@ task.spawn(function()
 					if visualEscalaConSize(head) and head.Transparency ~= 1 then head.Transparency = 1 end
 					if reg.fake and reg.fake.Parent == nil then reg.fake.Parent = head.Parent end
 				else
-					-- Restaurar estado natural si se apagó el hitbox de ESTE jugador desde la interfaz (F2)
+					-- Restaurar estado natural si se apagó el hitbox desde la interfaz (F2)
 					if head.Size ~= reg.size then head.Size = reg.size end
 					if visualEscalaConSize(head) and head.Transparency ~= reg.transp then head.Transparency = reg.transp end
 					if reg.fake and reg.fake.Parent ~= nil then reg.fake.Parent = nil end
@@ -529,7 +453,6 @@ local function restaurarTodo()
 	
 	table.clear(conexionesEscudo)
 	table.clear(registros)
-	table.clear(jugadoresActivos)
 	if GUI then GUI:Destroy() end
 end
 
