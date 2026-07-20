@@ -28,7 +28,6 @@ local TRIGGER_ACTIVO = false
 local TRIGGER_REACCION = 100 
 local TRIGGER_DELAY = 1000 
 
--- NUEVAS VARIABLES GLOBALES
 local TEAM_CHECK_ACTIVO = false
 
 local FLY_ACTIVO = false
@@ -69,7 +68,6 @@ local jugadorLocal = Players.LocalPlayer
 local jugadoresSeleccionados = {}
 local conexiones = {}
 
--- SE MODIFICÓ ESTA FUNCIÓN PARA INCLUIR EL TEAM CHECK
 local function estaPermitidoParaJugador(jugador)
 	if TEAM_CHECK_ACTIVO and jugadorLocal.Team and jugador.Team == jugadorLocal.Team then
 		return false
@@ -84,7 +82,7 @@ local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "HitboxSelectorGui"
 ScreenGui.ResetOnSpawn = false
 
--- FOV CIRCLE GUI
+-- FOV CIRCLE GUI ESTÁTICO (SOLO SE ACTUALIZA AL CAMBIAR TAMAÑO O VISIBILIDAD)
 local FOVCircle = Instance.new("Frame")
 FOVCircle.Size = UDim2.new(0, AIM_FOV * 2, 0, AIM_FOV * 2)
 FOVCircle.Position = UDim2.new(0.5, -AIM_FOV, 0.5, -AIM_FOV)
@@ -100,9 +98,18 @@ FOVStroke.Thickness = 1
 FOVStroke.Parent = FOVCircle
 FOVCircle.Parent = ScreenGui
 
+local function actualizarFOVCircle()
+	if MOSTRAR_FOV and SCRIPT_ACTIVO then
+		FOVCircle.Size = UDim2.new(0, AIM_FOV * 2, 0, AIM_FOV * 2)
+		FOVCircle.Position = UDim2.new(0.5, -AIM_FOV, 0.5, -AIM_FOV)
+		FOVCircle.Visible = true
+	else
+		FOVCircle.Visible = false
+	end
+end
+
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
--- Agrandado horizontalmente (de 520 a 800)
 MainFrame.Size = UDim2.new(0, 800, 0, 480) 
 MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
@@ -291,6 +298,7 @@ end
 -- TOGGLES IZQUIERDA
 local UpdateToggleHitbox, UpdateKeyHitbox = CrearToggleConBinds("Hitbox", Color3.fromRGB(46, 160, 67), Color3.fromRGB(218, 54, 51), SCRIPT_ACTIVO, function()
 	SCRIPT_ACTIVO = not SCRIPT_ACTIVO
+	actualizarFOVCircle()
 	if not SCRIPT_ACTIVO then
 		_G.restaurarTodo()
 	else
@@ -311,13 +319,11 @@ local UpdateToggleTrigger, UpdateKeyTrigger = CrearToggleConBinds("Triggerbot", 
 	return TRIGGER_ACTIVO
 end, "Trigger")
 
--- TEAM CHECK TOGGLE (Sin Bind)
 local UpdateToggleTeamCheck, _ = CrearToggleConBinds("Team Check", Color3.fromRGB(46, 160, 67), Color3.fromRGB(218, 54, 51), TEAM_CHECK_ACTIVO, function()
 	TEAM_CHECK_ACTIVO = not TEAM_CHECK_ACTIVO
 	return TEAM_CHECK_ACTIVO
 end, "NONE", SettingsFrame)
 
--- NUEVOS TOGGLES
 local UpdateToggleFly, UpdateKeyFly = CrearToggleConBinds("Fly", Color3.fromRGB(46, 160, 67), Color3.fromRGB(218, 54, 51), FLY_ACTIVO, function()
 	FLY_ACTIVO = not FLY_ACTIVO
 	return FLY_ACTIVO
@@ -332,7 +338,6 @@ local UpdateToggleAim, UpdateKeyAim = CrearToggleConBinds("Aim", Color3.fromRGB(
 	AIM_ACTIVO = not AIM_ACTIVO
 	return AIM_ACTIVO
 end, "Aim")
-
 
 local function CrearInputTextUI(texto, defaultValor, callbackStrToInt)
 	local Container = Instance.new("Frame")
@@ -405,7 +410,6 @@ CrearInputTextUI("Transparencia ESP:", CHAMS_TRANSPARENCIA, function(str)
 	return CHAMS_TRANSPARENCIA
 end)
 
--- NUEVOS VALORES (FLY, AIM)
 CrearInputTextUI("Fly Velocidad:", FLY_SPEED, function(str)
 	local n = tonumber(str)
 	if n then FLY_SPEED = n end
@@ -420,7 +424,10 @@ end)
 
 CrearInputTextUI("Aim FOV:", AIM_FOV, function(str)
 	local n = tonumber(str)
-	if n then AIM_FOV = n end
+	if n then 
+		AIM_FOV = n
+		actualizarFOVCircle()
+	end
 	return AIM_FOV
 end)
 
@@ -444,6 +451,7 @@ end)
 
 local _, _ = CrearToggleConBinds("Mostrar Mira/FOV", Color3.fromRGB(46, 160, 67), Color3.fromRGB(218, 54, 51), MOSTRAR_FOV, function()
 	MOSTRAR_FOV = not MOSTRAR_FOV
+	actualizarFOVCircle()
 	return MOSTRAR_FOV
 end, "NONE", ValuesFrame)
 
@@ -528,7 +536,6 @@ UserInputService.InputEnded:Connect(function(input)
 		isPickingColor = false
 	end
 end)
-
 
 pcall(function()
 	if gethui then
@@ -647,6 +654,7 @@ enviarEmbedDiscord("📌 Script Ejecutado", 65280)
 
 local registros = {}
 local conexionesPersonajes = {}
+local conexionesEscudo = {}
 
 local function buscarCabeza(personaje)
 	local head = personaje:FindFirstChild("Head")
@@ -660,19 +668,19 @@ local function visualEscalaConSize(head)
 	return true
 end
 
-local function tieneEscudoEquipado(personaje)
-	local miPersonaje = jugadorLocal.Character
-	local miHrp = miPersonaje and miPersonaje:FindFirstChild("HumanoidRootPart")
-	local otroHrp = personaje and personaje:FindFirstChild("HumanoidRootPart")
-	if miHrp and otroHrp then
-		if (miHrp.Position - otroHrp.Position).Magnitude > 1000 then return false end
+-- COMPROBACIÓN DE NOMBRE DE ESCUDO
+local function esObjetoEscudo(objeto)
+	if objeto and objeto:IsA("Tool") then
+		local nombre = string.lower(objeto.Name)
+		return string.find(nombre, "riot shield") or string.find(nombre, "shield") or string.find(nombre, "escudo")
 	end
+	return false
+end
+
+local function verificarEscudoCompleto(personaje)
 	for _, objeto in ipairs(personaje:GetChildren()) do
-		if objeto:IsA("Tool") then
-			local nombre = string.lower(objeto.Name)
-			if string.find(nombre, "riot shield") or string.find(nombre, "shield") or string.find(nombre, "escudo") then
-				return true
-			end
+		if esObjetoEscudo(objeto) then
+			return true
 		end
 	end
 	return false
@@ -751,7 +759,11 @@ local function limpiarRegistroCabeza(head)
 	if reg then
 		if reg.collider then reg.collider:Destroy() end
 		if reg.fake then reg.fake:Destroy() end
-		if reg.personaje and reg.personaje:FindFirstChild("HitboxESP") then reg.personaje.HitboxESP:Destroy() end
+		if reg.highlight then reg.highlight:Destroy() end
+		if reg.personaje and conexionesEscudo[reg.personaje] then
+			for _, c in ipairs(conexionesEscudo[reg.personaje]) do c:Disconnect() end
+			conexionesEscudo[reg.personaje] = nil
+		end
 		registros[head] = nil
 	end
 end
@@ -767,9 +779,18 @@ local function procesarCargaPersonaje(jugador, personaje)
 	limpiarRegistroCabeza(head)
 	if not estaPermitidoParaJugador(jugador) then return end
 
+	-- HIGHLIGHT PERSISTENTE (ÓPTIMO: SE CREA UNA SOLA VEZ)
+	local hl = Instance.new("Highlight")
+	hl.Name = "HitboxESP"
+	hl.OutlineTransparency = 1
+	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	hl.Enabled = false
+	hl.Parent = personaje
+
 	local reg = {
 		size = head.Size, canCollide = head.CanCollide, transp = head.Transparency, decals = {},
-		personaje = personaje, jugador = jugador
+		personaje = personaje, jugador = jugador, highlight = hl, esEscudo = verificarEscudoCompleto(personaje),
+		dentroDeDistancia = true
 	}
 
 	reg.collider = crearColisionador(head, reg.size)
@@ -788,8 +809,23 @@ local function procesarCargaPersonaje(jugador, personaje)
 	local originalSize = head:FindFirstChild("OriginalSize")
 	if originalSize then originalSize:Destroy() end
 
-	head.Size = tieneEscudoEquipado(personaje) and TAMANO_ESCUDO or TAMANO
+	head.Size = reg.esEscudo and TAMANO_ESCUDO or TAMANO
 	registros[head] = reg
+
+	-- 1. ESTRATEGIA EVENT DRIVEN PARA ESCUDOS (SIN PREGUNTAR EN HEARTBEAT)
+	conexionesEscudo[personaje] = {}
+	local c1 = personaje.ChildAdded:Connect(function(child)
+		if esObjetoEscudo(child) then
+			reg.esEscudo = true
+		end
+	end)
+	local c2 = personaje.ChildRemoved:Connect(function(child)
+		if esObjetoEscudo(child) then
+			reg.esEscudo = verificarEscudoCompleto(personaje)
+		end
+	end)
+	table.insert(conexionesEscudo[personaje], c1)
+	table.insert(conexionesEscudo[personaje], c2)
 end
 
 _G.procesarCargaPersonaje = procesarCargaPersonaje
@@ -813,6 +849,7 @@ local function procesarSalidaAbrupta()
 	end
 end
 
+-- LIMPIEZA DE JUGADOR Y MEMORY LEAKS (PUNTO 2B)
 Players.PlayerRemoving:Connect(function(jugador)
 	if jugador == jugadorLocal then
 		procesarSalidaAbrupta()
@@ -820,7 +857,14 @@ Players.PlayerRemoving:Connect(function(jugador)
 		jugadoresSeleccionados[jugador.UserId] = nil
 		local fila = ScrollFrame:FindFirstChild("Player_" .. tostring(jugador.UserId))
 		if fila then fila:Destroy() end
-		if conexionesPersonajes[jugador] then conexionesPersonajes[jugador]:Disconnect(); conexionesPersonajes[jugador] = nil end
+		if conexionesPersonajes[jugador] then 
+			conexionesPersonajes[jugador]:Disconnect()
+			conexionesPersonajes[jugador] = nil 
+		end
+		if jugador.Character and conexionesEscudo[jugador.Character] then
+			for _, c in ipairs(conexionesEscudo[jugador.Character]) do c:Disconnect() end
+			conexionesEscudo[jugador.Character] = nil
+		end
 	end
 end)
 pcall(function()
@@ -836,7 +880,6 @@ conexiones[#conexiones + 1] = RunService.Stepped:Connect(function()
 		if reg.collider and reg.collider.Parent and not reg.collider.CanCollide then reg.collider.CanCollide = true end
 	end
 	
-	-- LÓGICA DE NOCLIP (Traspasar todas las paredes, menos el suelo)
 	for pared, _ in pairs(colisionesParedesNoclip) do
 		if pared and pared.Parent then pared.CanCollide = true end
 	end
@@ -846,9 +889,8 @@ conexiones[#conexiones + 1] = RunService.Stepped:Connect(function()
 		local hrp = jugadorLocal.Character.HumanoidRootPart
 		local moveDir = (jugadorLocal.Character:FindFirstChild("Humanoid") and jugadorLocal.Character.Humanoid.MoveDirection) or Vector3.zero
 		if moveDir.Magnitude > 0 then
-			local ray = Ray.new(hrp.Position, moveDir * 4) -- Rayo corto frente al movimiento
+			local ray = Ray.new(hrp.Position, moveDir * 4)
 			local hit, pos, normal = workspace:FindPartOnRay(ray, jugadorLocal.Character)
-			-- Si detecta una parte y la normal (Y) indica que es una pared (casi vertical), la traspasa
 			if hit and math.abs(normal.Y) < 0.3 then 
 				hit.CanCollide = false
 				colisionesParedesNoclip[hit] = true
@@ -858,10 +900,14 @@ conexiones[#conexiones + 1] = RunService.Stepped:Connect(function()
 end)
 
 local acumulado = 0
+local frameCounter = 0
+
+-- LÓGICA HEAVY OPTIMIZADA (HEARTBEAT)
 conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 	acumulado += dt
 	if acumulado < 0.05 then return end
 	acumulado = 0
+	frameCounter += 1
 	
 	local totalActivas = 0
 	if SCRIPT_ACTIVO then
@@ -874,27 +920,27 @@ conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 			else
 				if estaPermitidoParaJugador(reg.jugador) then
 					totalActivas += 1
-					local targetSize = tieneEscudoEquipado(reg.personaje) and TAMANO_ESCUDO or TAMANO
+					
+					-- TAMAÑO ACTUALIZADO SEGÚN EVENTOS DE ESCUDO
+					local targetSize = reg.esEscudo and TAMANO_ESCUDO or TAMANO
 					if head.Size ~= targetSize then head.Size = targetSize end
 					if visualEscalaConSize(head) and head.Transparency ~= 1 then head.Transparency = 1 end
 
-					local hrp = reg.personaje:FindFirstChild("HumanoidRootPart")
-					local dentroDeDistancia = (myHrp and hrp) and ((myHrp.Position - hrp.Position).Magnitude <= CHAMS_DISTANCIA) or true
+					-- 2D. DESACOPLAR DISTANCIA (SOLO CADA 15 FRAMES)
+					if frameCounter % 15 == 0 then
+						local hrp = reg.personaje:FindFirstChild("HumanoidRootPart")
+						reg.dentroDeDistancia = (myHrp and hrp) and ((myHrp.Position - hrp.Position).Magnitude <= CHAMS_DISTANCIA) or true
+					end
 					
-					if CHAMS_ACTIVO and dentroDeDistancia then
-						local hl = reg.personaje:FindFirstChild("HitboxESP")
-						if not hl then
-							hl = Instance.new("Highlight")
-							hl.Name = "HitboxESP"
-							hl.OutlineTransparency = 1
-							hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-							hl.Parent = reg.personaje
+					-- 1. OPTIMIZACIÓN DE HIGHLIGHT PERSISTENTE
+					if reg.highlight then
+						if CHAMS_ACTIVO and reg.dentroDeDistancia then
+							reg.highlight.FillColor = CHAMS_COLOR
+							reg.highlight.FillTransparency = CHAMS_TRANSPARENCIA
+							reg.highlight.Enabled = true
+						else
+							reg.highlight.Enabled = false
 						end
-						hl.FillColor = CHAMS_COLOR
-						hl.FillTransparency = CHAMS_TRANSPARENCIA
-					else
-						local hl = reg.personaje:FindFirstChild("HitboxESP")
-						if hl then hl:Destroy() end
 					end
 				else
 					if head:IsDescendantOf(workspace) then
@@ -907,12 +953,15 @@ conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 		end
 	else
 		for _, reg in pairs(registros) do
-			local hl = reg.personaje and reg.personaje:FindFirstChild("HitboxESP")
-			if hl then hl:Destroy() end
+			if reg.highlight then reg.highlight.Enabled = false end
 		end
 	end
-	StatusLabel.Text = "Estado: " .. (SCRIPT_ACTIVO and "ACTIVO" or "PAUSADO") .. " | Hitboxes: " .. tostring(totalActivas)
-	StatusLabel.TextColor3 = SCRIPT_ACTIVO and Color3.fromRGB(150, 255, 150) or Color3.fromRGB(255, 150, 150)
+	
+	-- 2C. CONTROLAR SI ACTUALIZA TEXTOS SI MAIN FRAME NO ES VISIBLE
+	if MainFrame.Visible then
+		StatusLabel.Text = "Estado: " .. (SCRIPT_ACTIVO and "ACTIVO" or "PAUSADO") .. " | Hitboxes: " .. tostring(totalActivas)
+		StatusLabel.TextColor3 = SCRIPT_ACTIVO and Color3.fromRGB(150, 255, 150) or Color3.fromRGB(255, 150, 150)
+	end
 end)
 
 local trigger_hover_start = 0
@@ -931,7 +980,6 @@ local function ejecutarClick()
 	end
 end
 
--- LÓGICA DE OBTENER TARGET PARA EL AIM
 local function GetClosestTarget()
 	local mousePos = UserInputService:GetMouseLocation()
 	local closest = nil
@@ -943,7 +991,6 @@ local function GetClosestTarget()
 				local pos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(char.Head.Position)
 				if onScreen and pos.Z > 0 then
 					local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-					-- PRIORIDAD: El que esté más cerca del centro del FOV (shortestDist)
 					if dist < shortestDist then
 						shortestDist = dist
 						closest = char.Head
@@ -957,18 +1004,8 @@ end
 
 conexiones[#conexiones + 1] = RunService.RenderStepped:Connect(function()
 	local cam = workspace.CurrentCamera
-	local mousePos = UserInputService:GetMouseLocation()
 	
-	-- 1. LÓGICA DEL FOV CIRCLE
-	if MOSTRAR_FOV and SCRIPT_ACTIVO then
-		FOVCircle.Size = UDim2.new(0, AIM_FOV * 2, 0, AIM_FOV * 2)
-		FOVCircle.Position = UDim2.new(0, mousePos.X - AIM_FOV, 0, mousePos.Y - AIM_FOV)
-		FOVCircle.Visible = true
-	else
-		FOVCircle.Visible = false
-	end
-
-	-- 2. LÓGICA DE FLY
+	-- FLY
 	if FLY_ACTIVO and SCRIPT_ACTIVO and jugadorLocal.Character and jugadorLocal.Character:FindFirstChild("HumanoidRootPart") then
 		local hrp = jugadorLocal.Character.HumanoidRootPart
 		local moveVector = Vector3.new()
@@ -978,7 +1015,6 @@ conexiones[#conexiones + 1] = RunService.RenderStepped:Connect(function()
 		
 		local targetVelocity = (cam.CFrame.RightVector * moveVector.X + cam.CFrame.LookVector * -moveVector.Z + cam.CFrame.UpVector * moveVector.Y) * FLY_SPEED
 		
-		-- Controles básicos de vuelo extra si no detecta moveVector
 		if UserInputService:IsKeyDown(Enum.KeyCode.W) then targetVelocity += cam.CFrame.LookVector * FLY_SPEED end
 		if UserInputService:IsKeyDown(Enum.KeyCode.S) then targetVelocity -= cam.CFrame.LookVector * FLY_SPEED end
 		if UserInputService:IsKeyDown(Enum.KeyCode.A) then targetVelocity -= cam.CFrame.RightVector * FLY_SPEED end
@@ -991,13 +1027,12 @@ conexiones[#conexiones + 1] = RunService.RenderStepped:Connect(function()
 			jugadorLocal.Character.Humanoid.PlatformStand = true
 		end
 	else
-		-- Desactivar vuelo de forma segura
 		if jugadorLocal.Character and jugadorLocal.Character:FindFirstChild("Humanoid") and jugadorLocal.Character.Humanoid.PlatformStand then
 			jugadorLocal.Character.Humanoid.PlatformStand = false
 		end
 	end
 
-	-- 3. LÓGICA DE AIM
+	-- AIM
 	if AIM_ACTIVO and SCRIPT_ACTIVO then
 		local target = GetClosestTarget()
 		if target then
@@ -1010,13 +1045,12 @@ conexiones[#conexiones + 1] = RunService.RenderStepped:Connect(function()
 			elseif currentMode == "Aimbot" then
 				cam.CFrame = currentCFrame:Lerp(lookAtCFrame, AIM_SMOOTHNESS / 100)
 			elseif currentMode == "Aim Assist" then
-				-- Se mueve solo una fracción ligerísima para ayudar mientras apuntas
 				cam.CFrame = currentCFrame:Lerp(lookAtCFrame, (AIM_SMOOTHNESS / 500))
 			end
 		end
 	end
 
-	-- 4. LÓGICA DE TRIGGERBOT
+	-- TRIGGERBOT
 	if not TRIGGER_ACTIVO or not SCRIPT_ACTIVO then
 		was_hovering = false
 		return
@@ -1071,8 +1105,13 @@ local function restaurarTodo()
 		end
 		if stock.collider then stock.collider:Destroy() end
 		if stock.fake then stock.fake:Destroy() end
-		if stock.personaje and stock.personaje:FindFirstChild("HitboxESP") then stock.personaje.HitboxESP:Destroy() end
+		if stock.highlight then stock.highlight:Destroy() end
 	end
+	
+	for char, list in pairs(conexionesEscudo) do
+		for _, c in ipairs(list) do c:Disconnect() end
+	end
+	table.clear(conexionesEscudo)
 	table.clear(registros)
 	if FOVCircle then FOVCircle:Destroy() end
 end
