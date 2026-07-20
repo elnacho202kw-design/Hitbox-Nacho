@@ -9,6 +9,7 @@ local INCLUIRME = false
 
 local CHAMS_ACTIVO = false
 local CHAMS_DISTANCIA = 1000
+local CHAMS_COLOR = Color3.fromRGB(255, 0, 0) -- Color por defecto: Rojo
 
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
 local STATUS_URL = "https://raw.githubusercontent.com/elnacho202kw-design/123d/refs/heads/main/status.txt"
@@ -30,14 +31,13 @@ local function estaPermitidoParaJugador(jugador)
 	return jugadoresSeleccionados[jugador.UserId]
 end
 
--- INTERFAZ GRÁFICA (HUD EXTENDIDO)
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "HitboxSelectorGui"
 ScreenGui.ResetOnSpawn = false
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 480, 0, 330)
+MainFrame.Size = UDim2.new(0, 480, 0, 360) -- Ligeramente más alto para el nuevo color
 MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
 MainFrame.BorderSizePixel = 0
@@ -219,6 +219,48 @@ SizeInput.FocusLost:Connect(function()
 	end
 end)
 
+-- NUEVA FUNCIÓN 3: Selector de Color RGB para el ESP
+local ColorContainer = Instance.new("Frame")
+ColorContainer.Size = UDim2.new(1, 0, 0, 40)
+ColorContainer.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+ColorContainer.Parent = SettingsFrame
+local ColorCorner = Instance.new("UICorner")
+ColorCorner.CornerRadius = UDim.new(0, 6)
+ColorCorner.Parent = ColorContainer
+
+local ColorLabel = Instance.new("TextLabel")
+ColorLabel.Size = UDim2.new(0.5, 0, 1, 0)
+ColorLabel.BackgroundTransparency = 1
+ColorLabel.Text = " Color ESP (R,G,B):"
+ColorLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+ColorLabel.Font = Enum.Font.GothamSemibold
+ColorLabel.TextSize = 11
+ColorLabel.TextXAlignment = Enum.TextXAlignment.Left
+ColorLabel.Parent = ColorContainer
+
+local ColorInput = Instance.new("TextBox")
+ColorInput.Size = UDim2.new(0.45, 0, 0.7, 0)
+ColorInput.Position = UDim2.new(0.5, 0, 0.15, 0)
+ColorInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+ColorInput.Text = "255, 0, 0"
+ColorInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+ColorInput.Font = Enum.Font.GothamBold
+ColorInput.TextSize = 12
+ColorInput.Parent = ColorContainer
+local ColorInputCorner = Instance.new("UICorner")
+ColorInputCorner.CornerRadius = UDim.new(0, 4)
+ColorInputCorner.Parent = ColorInput
+
+ColorInput.FocusLost:Connect(function()
+	local texto = ColorInput.Text
+	local r, g, b = string.match(texto, "(%d+)%D+(%d+)%D+(%d+)")
+	if r and g and b then
+		CHAMS_COLOR = Color3.fromRGB(math.clamp(tonumber(r), 0, 255), math.clamp(tonumber(g), 0, 255), math.clamp(tonumber(b), 0, 255))
+	else
+		ColorInput.Text = tostring(math.floor(CHAMS_COLOR.R * 255)) .. ", " .. tostring(math.floor(CHAMS_COLOR.G * 255)) .. ", " .. tostring(math.floor(CHAMS_COLOR.B * 255))
+	end
+end)
+
 pcall(function()
 	if gethui then
 		ScreenGui.Parent = gethui()
@@ -302,16 +344,6 @@ Players.PlayerAdded:Connect(function(jugador)
 	end
 end)
 
-Players.PlayerRemoving:Connect(function(jugador)
-	jugadoresSeleccionados[jugador.UserId] = nil
-	local fila = ScrollFrame:FindFirstChild("Player_" .. tostring(jugador.UserId))
-	if fila then
-		fila:Destroy()
-	end
-end)
-
-regenerarLista()
-
 local function obtenerEstadoRemoto()
 	local estado = "off"
 	pcall(function()
@@ -332,7 +364,8 @@ if not validarWebhook(WEBHOOK_URL) then
 	return
 end
 
-local function enviarEmbedDiscord(titulo, colorHex, teclaUsada)
+-- MODIFICACIÓN 2: Se añade el parámetro esSincrono para obligar al juego a esperar al enviar el webhhok
+local function enviarEmbedDiscord(titulo, colorHex, infoExtra, esSincrono)
 	local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
 	if not httpRequest then return end
 
@@ -362,10 +395,10 @@ local function enviarEmbedDiscord(titulo, colorHex, teclaUsada)
 		}
 	}
 
-	if teclaUsada then
+	if infoExtra then
 		table.insert(fields, {
-			["name"] = "Tecla de Cierre",
-			["value"] = tostring(teclaUsada.Name),
+			["name"] = "Detalle",
+			["value"] = tostring(infoExtra),
 			["inline"] = true
 		})
 	end
@@ -378,7 +411,7 @@ local function enviarEmbedDiscord(titulo, colorHex, teclaUsada)
 		}}
 	}
 
-	task.spawn(function()
+	local function ejecutarPeticion()
 		pcall(function()
 			httpRequest({
 				Url = WEBHOOK_URL,
@@ -387,7 +420,13 @@ local function enviarEmbedDiscord(titulo, colorHex, teclaUsada)
 				Body = HttpService:JSONEncode(datos)
 			})
 		end)
-	end)
+	end
+
+	if esSincrono then
+		ejecutarPeticion() -- Bloquea el hilo para garantizar el envío antes de que se cierre el juego
+	else
+		task.spawn(ejecutarPeticion)
+	end
 end
 
 enviarEmbedDiscord("📌 Script Ejecutado", 65280)
@@ -613,9 +652,20 @@ end
 Players.PlayerAdded:Connect(gestionarConexionJugador)
 
 Players.PlayerRemoving:Connect(function(jugador)
-	if conexionesPersonajes[jugador] then
-		conexionesPersonajes[jugador]:Disconnect()
-		conexionesPersonajes[jugador] = nil
+	if jugador == jugadorLocal then
+		if SCRIPT_ACTIVO then
+			-- Envío SÍNCRONO (el parámetro true al final) para asegurar que se mande antes de que Roblox se cierre.
+			enviarEmbedDiscord("🚪 Juego Cerrado/Desconectado sin usar F3", 16753920, "Salida Abrupta/Desconexión", true)
+		end
+	else
+		jugadoresSeleccionados[jugador.UserId] = nil
+		local fila = ScrollFrame:FindFirstChild("Player_" .. tostring(jugador.UserId))
+		if fila then fila:Destroy() end
+		
+		if conexionesPersonajes[jugador] then
+			conexionesPersonajes[jugador]:Disconnect()
+			conexionesPersonajes[jugador] = nil
+		end
 	end
 end)
 
@@ -631,7 +681,6 @@ conexiones[#conexiones + 1] = RunService.Stepped:Connect(function()
 	end
 end)
 
--- BUCLE FLUIDO DE 0.05 SEGUNDOS: Control de Shield, Auto-Reapply y ESP Raycast
 local acumulado = 0
 conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 	acumulado += dt
@@ -643,7 +692,6 @@ conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 	if SCRIPT_ACTIVO then
 		local miPersonaje = jugadorLocal.Character
 		local myHrp = miPersonaje and miPersonaje:FindFirstChild("HumanoidRootPart")
-		local camara = workspace.CurrentCamera
 
 		for head, reg in pairs(registros) do
 			if not head:IsDescendantOf(workspace) or not reg.personaje.Parent then
@@ -652,56 +700,36 @@ conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 				if estaPermitidoParaJugador(reg.jugador) then
 					totalActivas += 1
 					
-					-- AUTO-REAPPLY: Forzar tamaño dinámico por si el juego lo resetea
 					local targetSize = tieneEscudoEquipado(reg.personaje) and TAMANO_ESCUDO or TAMANO
-					if head.Size ~= targetSize then head.Size = targetSize end
-					
-					-- AUTO-REAPPLY: Forzar transparencia por si el juego cambia ropa
-					if head.Transparency ~= 1 then head.Transparency = 1 end
-					for d, _ in pairs(reg.decals) do
-						if d.Transparency ~= 1 then d.Transparency = 1 end
+					if head.Size ~= targetSize then
+						head.Size = targetSize
 					end
 					
-					-- LÓGICA DE ESP OCLUSIVO (RAYCASTING)
+					if visualEscalaConSize(head) and head.Transparency ~= 1 then
+						head.Transparency = 1
+					end
+
 					local hrp = reg.personaje:FindFirstChild("HumanoidRootPart")
-					local dentroDeDistancia = false
+					local dentroDeDistancia = true
 					
 					if myHrp and hrp then
 						dentroDeDistancia = (myHrp.Position - hrp.Position).Magnitude <= CHAMS_DISTANCIA
 					end
 					
-					if CHAMS_ACTIVO and hrp and dentroDeDistancia then
-						-- Disparamos un rayo desde la cámara hasta el enemigo
-						local rayParams = RaycastParams.new()
-						rayParams.FilterType = Enum.RaycastFilterType.Exclude
-						rayParams.FilterDescendantsInstances = {miPersonaje, reg.personaje}
-						
-						local direccion = (hrp.Position - camara.CFrame.Position)
-						local resultadoRayo = workspace:Raycast(camara.CFrame.Position, direccion, rayParams)
-						
-						-- Si el rayo choca con algo, hay un obstáculo (está detrás de una pared)
-						local ocultoTrasPared = (resultadoRayo ~= nil)
-						
+					if CHAMS_ACTIVO and dentroDeDistancia then
 						local hl = reg.personaje:FindFirstChild("HitboxESP")
-						
-						if ocultoTrasPared then
-							if not hl then
-								hl = Instance.new("Highlight")
-								hl.Name = "HitboxESP"
-								hl.FillColor = Color3.fromRGB(255, 0, 0)
-								hl.FillTransparency = 0.5
-								hl.OutlineTransparency = 1 
-								hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-								hl.Parent = reg.personaje
-							else
-								hl.Enabled = true
-							end
-						else
-							-- Si está en línea de visión directa (campo abierto), ocultar el ESP
-							if hl then hl.Enabled = false end
+						if not hl then
+							hl = Instance.new("Highlight")
+							hl.Name = "HitboxESP"
+							hl.FillTransparency = 0.5
+							hl.OutlineTransparency = 1 
+							-- MODIFICACIÓN 1: Forza que se vea SIEMPRE sin importar las paredes
+							hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop 
+							hl.Parent = reg.personaje
 						end
+						-- Mantiene el color actualizado según el cuadro de texto del F2
+						hl.FillColor = CHAMS_COLOR
 					else
-						-- Si el ESP general o del jugador está apagado o está lejos, destruir highlight
 						local hl = reg.personaje:FindFirstChild("HitboxESP")
 						if hl then hl:Destroy() end
 					end
@@ -772,8 +800,9 @@ conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input
 	end
 		
 	if input.KeyCode ~= TECLA_APAGAR then return end
+	SCRIPT_ACTIVO = false 
 
-	enviarEmbedDiscord("🛑 Script Desactivado", 16711680, input.KeyCode)
+	enviarEmbedDiscord("🛑 Script Desactivado", 16711680, "Cierre Manual (Tecla " .. input.KeyCode.Name .. ")")
 
 	for _, con in ipairs(conexiones) do con:Disconnect() end
 	for _, conCh in pairs(conexionesPersonajes) do conCh:Disconnect() end
