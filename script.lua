@@ -7,7 +7,6 @@ local TECLA_MENU = Enum.KeyCode.F2
 local SCRIPT_ACTIVO = true
 local INCLUIRME = false
 
--- NUEVAS VARIABLES EXTRAS
 local CHAMS_ACTIVO = false
 local CHAMS_DISTANCIA = 1000
 
@@ -31,14 +30,14 @@ local function estaPermitidoParaJugador(jugador)
 	return jugadoresSeleccionados[jugador.UserId]
 end
 
--- INTERFAZ GRÁFICA RENOVADA (HUD EXTENDIDO)
+-- INTERFAZ GRÁFICA (HUD EXTENDIDO)
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "HitboxSelectorGui"
 ScreenGui.ResetOnSpawn = false
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 480, 0, 330) -- Más ancho para alojar las configuraciones
+MainFrame.Size = UDim2.new(0, 480, 0, 330)
 MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
 MainFrame.BorderSizePixel = 0
@@ -73,7 +72,6 @@ TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TitleBar
 
--- COLUMNA IZQUIERDA: LISTA JUGADORES
 local ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Name = "PlayersScroll"
 ScrollFrame.Size = UDim2.new(0, 225, 1, -45)
@@ -93,7 +91,6 @@ UIList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 	ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, UIList.AbsoluteContentSize.Y)
 end)
 
--- COLUMNA DERECHA: CONFIGURACIÓN EXTRA (HUD INTEGRADO)
 local SettingsFrame = Instance.new("Frame")
 SettingsFrame.Name = "SettingsFrame"
 SettingsFrame.Size = UDim2.new(0, 230, 1, -45)
@@ -106,7 +103,6 @@ UISettingsList.SortOrder = Enum.SortOrder.LayoutOrder
 UISettingsList.Padding = UDim.new(0, 10)
 UISettingsList.Parent = SettingsFrame
 
--- FUNCION 3: HUD de Estado interno
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, 0, 0, 30)
 StatusLabel.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
@@ -119,7 +115,6 @@ local StatusCorner = Instance.new("UICorner")
 StatusCorner.CornerRadius = UDim.new(0, 6)
 StatusCorner.Parent = StatusLabel
 
--- FUNCIÓN 1: Botón Toggle Chams (ESP)
 local ChamsBtn = Instance.new("TextButton")
 ChamsBtn.Size = UDim2.new(1, 0, 0, 35)
 ChamsBtn.BackgroundColor3 = Color3.fromRGB(218, 54, 51)
@@ -143,7 +138,6 @@ ChamsBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- FUNCIÓN 1: Input de Distancia ESP
 local DistanciaContainer = Instance.new("Frame")
 DistanciaContainer.Size = UDim2.new(1, 0, 0, 40)
 DistanciaContainer.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
@@ -184,7 +178,6 @@ DistInput.FocusLost:Connect(function()
 	end
 end)
 
--- FUNCIÓN 4: Modificador de Tamaño Único (Solo tamaño normal, sin colores/transparencias)
 local SizeContainer = Instance.new("Frame")
 SizeContainer.Size = UDim2.new(1, 0, 0, 40)
 SizeContainer.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
@@ -196,7 +189,7 @@ SizeCorner.Parent = SizeContainer
 local SizeLabel = Instance.new("TextLabel")
 SizeLabel.Size = UDim2.new(0.6, 0, 1, 0)
 SizeLabel.BackgroundTransparency = 1
-SizeLabel.Text = " Tamaño Normal (Hitbox):"
+SizeLabel.Text = " Tamaño Normal:"
 SizeLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 SizeLabel.Font = Enum.Font.GothamSemibold
 SizeLabel.TextSize = 11
@@ -638,7 +631,7 @@ conexiones[#conexiones + 1] = RunService.Stepped:Connect(function()
 	end
 end)
 
--- BUCLE FLUIDO DE 0.05 SEGUNDOS (CONTROL DE SHIELD, DINÁMICA DE TAMAÑO Y ESP CHAMS SIMULTÁNEO)
+-- BUCLE FLUIDO DE 0.05 SEGUNDOS: Control de Shield, Auto-Reapply y ESP Raycast
 local acumulado = 0
 conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 	acumulado += dt
@@ -650,6 +643,7 @@ conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 	if SCRIPT_ACTIVO then
 		local miPersonaje = jugadorLocal.Character
 		local myHrp = miPersonaje and miPersonaje:FindFirstChild("HumanoidRootPart")
+		local camara = workspace.CurrentCamera
 
 		for head, reg in pairs(registros) do
 			if not head:IsDescendantOf(workspace) or not reg.personaje.Parent then
@@ -658,38 +652,60 @@ conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 				if estaPermitidoParaJugador(reg.jugador) then
 					totalActivas += 1
 					
-					-- Ajustador dinámico de tamaño (Normal vs Shield)
+					-- AUTO-REAPPLY: Forzar tamaño dinámico por si el juego lo resetea
 					local targetSize = tieneEscudoEquipado(reg.personaje) and TAMANO_ESCUDO or TAMANO
-					if head.Size ~= targetSize then
-						head.Size = targetSize
+					if head.Size ~= targetSize then head.Size = targetSize end
+					
+					-- AUTO-REAPPLY: Forzar transparencia por si el juego cambia ropa
+					if head.Transparency ~= 1 then head.Transparency = 1 end
+					for d, _ in pairs(reg.decals) do
+						if d.Transparency ~= 1 then d.Transparency = 1 end
 					end
 					
-					-- FUNCIÓN 1: Lógica Ultra-Fluida de Chams sin Lag (Roblox Highlight C++)
+					-- LÓGICA DE ESP OCLUSIVO (RAYCASTING)
 					local hrp = reg.personaje:FindFirstChild("HumanoidRootPart")
-					local dentroDeDistancia = true
+					local dentroDeDistancia = false
 					
 					if myHrp and hrp then
 						dentroDeDistancia = (myHrp.Position - hrp.Position).Magnitude <= CHAMS_DISTANCIA
 					end
 					
-					if CHAMS_ACTIVO and dentroDeDistancia then
+					if CHAMS_ACTIVO and hrp and dentroDeDistancia then
+						-- Disparamos un rayo desde la cámara hasta el enemigo
+						local rayParams = RaycastParams.new()
+						rayParams.FilterType = Enum.RaycastFilterType.Exclude
+						rayParams.FilterDescendantsInstances = {miPersonaje, reg.personaje}
+						
+						local direccion = (hrp.Position - camara.CFrame.Position)
+						local resultadoRayo = workspace:Raycast(camara.CFrame.Position, direccion, rayParams)
+						
+						-- Si el rayo choca con algo, hay un obstáculo (está detrás de una pared)
+						local ocultoTrasPared = (resultadoRayo ~= nil)
+						
 						local hl = reg.personaje:FindFirstChild("HitboxESP")
-						if not hl then
-							hl = Instance.new("Highlight")
-							hl.Name = "HitboxESP"
-							-- Color Rojo pedido
-							hl.FillColor = Color3.fromRGB(255, 0, 0)
-							hl.FillTransparency = 0.5
-							-- Excluye la cabeza gigante ocultando contornos
-							hl.OutlineTransparency = 1 
-							hl.Parent = reg.personaje
+						
+						if ocultoTrasPared then
+							if not hl then
+								hl = Instance.new("Highlight")
+								hl.Name = "HitboxESP"
+								hl.FillColor = Color3.fromRGB(255, 0, 0)
+								hl.FillTransparency = 0.5
+								hl.OutlineTransparency = 1 
+								hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+								hl.Parent = reg.personaje
+							else
+								hl.Enabled = true
+							end
+						else
+							-- Si está en línea de visión directa (campo abierto), ocultar el ESP
+							if hl then hl.Enabled = false end
 						end
 					else
+						-- Si el ESP general o del jugador está apagado o está lejos, destruir highlight
 						local hl = reg.personaje:FindFirstChild("HitboxESP")
 						if hl then hl:Destroy() end
 					end
 				else
-					-- Restauración en vivo si el jugador es apagado desde la lista
 					if head:IsDescendantOf(workspace) then
 						head.Size = reg.size
 						head.CanCollide = reg.canCollide
@@ -703,14 +719,12 @@ conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 			end
 		end
 	else
-		-- Si el script maestro está pausado, limpia todos los chams existentes
 		for _, reg in pairs(registros) do
 			local hl = reg.personaje and reg.personaje:FindFirstChild("HitboxESP")
 			if hl then hl:Destroy() end
 		end
 	end
 	
-	-- FUNCIÓN 3: Actualizar texto dinámico en el HUD del F2
 	StatusLabel.Text = "Estado: " .. (SCRIPT_ACTIVO and "ACTIVO" or "PAUSADO") .. " | Hitboxes: " .. tostring(totalActivas)
 	StatusLabel.TextColor3 = SCRIPT_ACTIVO and Color3.fromRGB(150, 255, 150) or Color3.fromRGB(255, 150, 150)
 end)
