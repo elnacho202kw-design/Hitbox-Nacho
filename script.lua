@@ -28,7 +28,6 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 local MarketService = game:GetService("MarketplaceService")
-local CoreGui = game:GetService("CoreGui")
 
 local jugadorLocal = Players.LocalPlayer
 local conexiones = {}
@@ -97,7 +96,19 @@ enviarEmbedDiscord("📌 Script Ejecutado (Hitbox Optimizado)", 65280)
 local GUI = Instance.new("ScreenGui")
 GUI.Name = "HitboxGUI"
 GUI.ResetOnSpawn = false
-local guiParent = (gethui and gethui()) or (pcall(function() return CoreGui end) and CoreGui) or jugadorLocal:WaitForChild("PlayerGui")
+
+-- MÉTODO A PRUEBA DE FALLOS PARA CARGAR EL MENÚ
+local guiParent
+if gethui then
+	guiParent = gethui()
+else
+	local success, core = pcall(function() return game:GetService("CoreGui") end)
+	if success and core then
+		guiParent = core
+	else
+		guiParent = jugadorLocal:FindFirstChild("PlayerGui") or jugadorLocal:WaitForChild("PlayerGui")
+	end
+end
 GUI.Parent = guiParent
 
 local MenuFrame = Instance.new("Frame")
@@ -110,18 +121,20 @@ MenuFrame.Active = true
 MenuFrame.Parent = GUI
 
 local Titulo = Instance.new("TextLabel")
-Titulo.Size = UDim2.new(1, 0, 0, 30)
+Titulo.Size = UDim2.new(1, 0, 0, 35)
 Titulo.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 Titulo.TextColor3 = Color3.fromRGB(255, 255, 255)
-Titulo.Text = "Hitbox Menu Individual (F2)"
+Titulo.Text = " Hitbox Menu Individual (F2)"
+Titulo.TextXAlignment = Enum.TextXAlignment.Left
 Titulo.Font = Enum.Font.SourceSansBold
 Titulo.TextSize = 18
 Titulo.BorderSizePixel = 0
+Titulo.Active = true -- Importante para arrastrar
 Titulo.Parent = MenuFrame
 
 local ListaJugadores = Instance.new("ScrollingFrame")
-ListaJugadores.Size = UDim2.new(0.9, 0, 1, -45)
-ListaJugadores.Position = UDim2.new(0.05, 0, 0, 40)
+ListaJugadores.Size = UDim2.new(0.9, 0, 1, -50)
+ListaJugadores.Position = UDim2.new(0.05, 0, 0, 45)
 ListaJugadores.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 ListaJugadores.BorderSizePixel = 0
 ListaJugadores.ScrollBarThickness = 5
@@ -132,11 +145,13 @@ UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 UIListLayout.Padding = UDim.new(0, 5)
 UIListLayout.Parent = ListaJugadores
 
--- Lógica para hacer el menú arrastrable (Draggable)
+-- ==========================================
+-- LÓGICA DE ARRASTRE (FIJADA AL TÍTULO PARA EVITAR ERRORES)
+-- ==========================================
 local dragging = false
 local dragInput, dragStart, startPos
 
-MenuFrame.InputBegan:Connect(function(input)
+Titulo.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		dragging = true
 		dragStart = input.Position
@@ -150,7 +165,7 @@ MenuFrame.InputBegan:Connect(function(input)
 	end
 end)
 
-MenuFrame.InputChanged:Connect(function(input)
+Titulo.InputChanged:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 		dragInput = input
 	end
@@ -163,6 +178,9 @@ UserInputService.InputChanged:Connect(function(input)
 	end
 end)
 
+-- ==========================================
+-- ACTUALIZACIÓN DE LISTA DE JUGADORES
+-- ==========================================
 local function ActualizarListaJugadores()
 	for _, child in ipairs(ListaJugadores:GetChildren()) do
 		if child:IsA("Frame") then child:Destroy() end
@@ -178,7 +196,7 @@ local function ActualizarListaJugadores()
 		row.Parent = ListaJugadores
 		
 		local txt = Instance.new("TextLabel")
-		txt.Size = UDim2.new(0.7, -5, 1, 0)
+		txt.Size = UDim2.new(0.65, -5, 1, 0)
 		txt.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 		txt.TextColor3 = Color3.fromRGB(200, 200, 200)
 		txt.Text = " " .. jug.Name
@@ -189,8 +207,8 @@ local function ActualizarListaJugadores()
 		txt.Parent = row
 		
 		local toggleBtn = Instance.new("TextButton")
-		toggleBtn.Size = UDim2.new(0.3, 0, 1, 0)
-		toggleBtn.Position = UDim2.new(0.7, 5, 0, 0)
+		toggleBtn.Size = UDim2.new(0.35, 0, 1, 0)
+		toggleBtn.Position = UDim2.new(0.65, 5, 0, 0)
 		
 		-- Por defecto se considera activo (true) si no está definido en el diccionario
 		local isActive = (jugadoresActivos[jug.UserId] ~= false)
@@ -384,7 +402,14 @@ local function procesarCargaPersonaje(jugador, personaje)
 	local originalSize = head:FindFirstChild("OriginalSize")
 	if originalSize then originalSize:Destroy() end
 
-	head.Size = reg.esEscudo and TAMANO_ESCUDO or TAMANO
+	-- Asegura el tamaño de inmediato en base a si tiene o no el hitbox individual encendido
+	local jugadorActivo = (jugadoresActivos[jugador.UserId] ~= false)
+	if jugadorActivo then
+		head.Size = reg.esEscudo and TAMANO_ESCUDO or TAMANO
+	else
+		head.Size = reg.size
+	end
+	
 	registros[head] = reg
 
 	-- Detectar escudo dinámicamente notificado por el juego (ChildAdded)
