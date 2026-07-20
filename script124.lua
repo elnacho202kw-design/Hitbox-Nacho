@@ -1,7 +1,7 @@
 -- ==========================================
 -- SCRIPT DE HITBOXES OPTIMIZADO
 -- Basado en la lógica avanzada de eventos y distancia
--- (Sin Menú)
+-- (CERO GUI)
 -- ==========================================
 
 local function calcularTamanoEscudo(sizeMultiplier)
@@ -21,7 +21,7 @@ local TAMANO_ESCUDO = calcularTamanoEscudo(TAMANO_MULTIPLICADOR)
 
 local TECLA_APAGAR = Enum.KeyCode.F3
 local SCRIPT_ACTIVO = true
-local EXPANSION_ACTIVA = true
+local EXPANSION_ACTIVA = true 
 local INCLUIRME = false
 
 local Players = game:GetService("Players")
@@ -88,7 +88,7 @@ local function enviarEmbedDiscord(titulo, colorHex)
 	end)
 end
 
-enviarEmbedDiscord("📌 Script Ejecutado (Hitbox Optimizado - Sin Menú)", 65280)
+enviarEmbedDiscord("📌 Script Ejecutado (Hitbox Optimizado sin GUI)", 65280)
 
 -- ==========================================
 -- LÓGICA CENTRAL DE HITBOX
