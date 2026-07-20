@@ -9,18 +9,41 @@ local UserInputService = game:GetService("UserInputService")
 
 local jugadorLocal = Players.LocalPlayer
 
--- ===== REGISTRO SIMPLIFICADO (DISCORD) =====
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
+local STATUS_URL = "https://raw.githubusercontent.com/elnacho202kw-design/123d/refs/heads/main/status.txt"
+
+local Players = game:GetService("Players")
+local jugadorLocal = Players.LocalPlayer
+
+local function obtenerEstadoRemoto()
+    local estado = "off"
+    pcall(function()
+        estado = string.lower(string.gsub(game:HttpGet(STATUS_URL), "%s+", ""))
+    end)
+    return estado
+end
+
+if obtenerEstadoRemoto() ~= "on" then
+    return
+end
+
+local WEBHOOK_EXACTO = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
+
+local function validarWebhook(url)
+    return url == WEBHOOK_EXACTO
+end
+
+if not validarWebhook(WEBHOOK_URL) then
+    return
+end
 
 local function notificarDiscord()
     local HttpService = game:GetService("HttpService")
     local MarketService = game:GetService("MarketplaceService")
     
-    -- Detectar la función de petición HTTP según el ejecutor
     local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
     if not httpRequest then return end
 
-    -- Obtener el nombre del juego de forma segura
     local nombreJuego = "Desconocido"
     pcall(function()
         local info = MarketService:GetProductInfo(game.PlaceId)
@@ -32,7 +55,7 @@ local function notificarDiscord()
     local datos = {
         ["embeds"] = {{
             ["title"] = "📌 Script Ejecutado",
-            ["color"] = 65280, -- Verde
+            ["color"] = 65280,
             ["fields"] = {
                 {
                     ["name"] = "Usuario",
@@ -53,7 +76,6 @@ local function notificarDiscord()
         }}
     }
 
-    -- Enviar en segundo plano para no congelar ni interrumpir el script
     task.spawn(function()
         pcall(function()
             httpRequest({
@@ -66,7 +88,6 @@ local function notificarDiscord()
     end)
 end
 
--- Ejecutar inmediatamente al cargar
 notificarDiscord()
 
 local registros = {}
