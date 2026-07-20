@@ -1,6 +1,18 @@
+local function calcularTamanoEscudo(sizeMultiplier)
+	if sizeMultiplier > 3 then
+		return Vector3.new(2, 2, 2.5)
+	else
+		-- Calcula la reducción proporcional manteniendo la distancia y aplicando topes
+		local dif = 3 - sizeMultiplier
+		local newX = math.max(1, 2 - dif)
+		local newZ = math.max(1.5, 2.5 - dif)
+		return Vector3.new(newX, newX, newZ)
+	end
+end
+
 local TAMANO_MULTIPLICADOR = 3
 local TAMANO = Vector3.new(TAMANO_MULTIPLICADOR, TAMANO_MULTIPLICADOR, TAMANO_MULTIPLICADOR)
-local TAMANO_ESCUDO = Vector3.new(2, 2, 2.5)
+local TAMANO_ESCUDO = calcularTamanoEscudo(TAMANO_MULTIPLICADOR)
 local TECLA_APAGAR = Enum.KeyCode.F3
 local TECLA_TOGGLE = Enum.KeyCode.F4
 local TECLA_MENU = Enum.KeyCode.F2
@@ -37,7 +49,7 @@ ScreenGui.ResetOnSpawn = false
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 480, 0, 360) -- Ligeramente más alto para el nuevo color
+MainFrame.Size = UDim2.new(0, 480, 0, 360)
 MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
 MainFrame.BorderSizePixel = 0
@@ -214,12 +226,13 @@ SizeInput.FocusLost:Connect(function()
 	if num and num > 0 then
 		TAMANO_MULTIPLICADOR = num
 		TAMANO = Vector3.new(num, num, num)
+		TAMANO_ESCUDO = calcularTamanoEscudo(num) -- Recalcula dinámicamente
 	else
 		SizeInput.Text = tostring(TAMANO_MULTIPLICADOR)
 	end
 end)
 
--- NUEVA FUNCIÓN 3: Selector de Color RGB para el ESP
+-- NUEVA FUNCIÓN: Selector de Color Visual (Círculo Cromático)
 local ColorContainer = Instance.new("Frame")
 ColorContainer.Size = UDim2.new(1, 0, 0, 40)
 ColorContainer.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
@@ -231,33 +244,87 @@ ColorCorner.Parent = ColorContainer
 local ColorLabel = Instance.new("TextLabel")
 ColorLabel.Size = UDim2.new(0.5, 0, 1, 0)
 ColorLabel.BackgroundTransparency = 1
-ColorLabel.Text = " Color ESP (R,G,B):"
+ColorLabel.Text = " Color ESP:"
 ColorLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 ColorLabel.Font = Enum.Font.GothamSemibold
 ColorLabel.TextSize = 11
 ColorLabel.TextXAlignment = Enum.TextXAlignment.Left
 ColorLabel.Parent = ColorContainer
 
-local ColorInput = Instance.new("TextBox")
-ColorInput.Size = UDim2.new(0.45, 0, 0.7, 0)
-ColorInput.Position = UDim2.new(0.5, 0, 0.15, 0)
-ColorInput.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-ColorInput.Text = "255, 0, 0"
-ColorInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-ColorInput.Font = Enum.Font.GothamBold
-ColorInput.TextSize = 12
-ColorInput.Parent = ColorContainer
-local ColorInputCorner = Instance.new("UICorner")
-ColorInputCorner.CornerRadius = UDim.new(0, 4)
-ColorInputCorner.Parent = ColorInput
+local ColorBtn = Instance.new("TextButton")
+ColorBtn.Size = UDim2.new(0.45, 0, 0.7, 0)
+ColorBtn.Position = UDim2.new(0.5, 0, 0.15, 0)
+ColorBtn.BackgroundColor3 = CHAMS_COLOR
+ColorBtn.Text = "Cambiar"
+ColorBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ColorBtn.Font = Enum.Font.GothamBold
+ColorBtn.TextSize = 12
+ColorBtn.Parent = ColorContainer
+local ColorBtnCorner = Instance.new("UICorner")
+ColorBtnCorner.CornerRadius = UDim.new(0, 4)
+ColorBtnCorner.Parent = ColorBtn
 
-ColorInput.FocusLost:Connect(function()
-	local texto = ColorInput.Text
-	local r, g, b = string.match(texto, "(%d+)%D+(%d+)%D+(%d+)")
-	if r and g and b then
-		CHAMS_COLOR = Color3.fromRGB(math.clamp(tonumber(r), 0, 255), math.clamp(tonumber(g), 0, 255), math.clamp(tonumber(b), 0, 255))
-	else
-		ColorInput.Text = tostring(math.floor(CHAMS_COLOR.R * 255)) .. ", " .. tostring(math.floor(CHAMS_COLOR.G * 255)) .. ", " .. tostring(math.floor(CHAMS_COLOR.B * 255))
+-- UI del selector de color
+local ColorPickerFrame = Instance.new("Frame")
+ColorPickerFrame.Name = "ColorPicker"
+ColorPickerFrame.Size = UDim2.new(0, 130, 0, 130)
+ColorPickerFrame.Position = UDim2.new(1.05, 0, -1, 0) -- Aparecerá justo al lado
+ColorPickerFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+ColorPickerFrame.Visible = false
+ColorPickerFrame.ZIndex = 10
+ColorPickerFrame.Parent = ColorContainer
+
+local PickerCorner = Instance.new("UICorner")
+PickerCorner.CornerRadius = UDim.new(0, 6)
+PickerCorner.Parent = ColorPickerFrame
+
+local ColorWheel = Instance.new("ImageLabel")
+ColorWheel.Size = UDim2.new(1, -10, 1, -10)
+ColorWheel.Position = UDim2.new(0, 5, 0, 5)
+ColorWheel.Image = "rbxassetid://6020299385" -- Rueda de colores redonda estándar
+ColorWheel.BackgroundTransparency = 1
+ColorWheel.ZIndex = 11
+ColorWheel.Parent = ColorPickerFrame
+
+ColorBtn.MouseButton1Click:Connect(function()
+	ColorPickerFrame.Visible = not ColorPickerFrame.Visible
+end)
+
+local isPickingColor = false
+
+local function actColor(input)
+	local size = ColorWheel.AbsoluteSize
+	local center = ColorWheel.AbsolutePosition + (size / 2)
+	local x = input.Position.X - center.X
+	local y = input.Position.Y - center.Y
+	
+	local radius = size.X / 2
+	local dist = math.min(math.sqrt(x^2 + y^2), radius)
+	local angle = math.atan2(y, x)
+	
+	local hue = (angle + math.pi) / (math.pi * 2)
+	local sat = dist / radius
+	
+	CHAMS_COLOR = Color3.fromHSV(hue, sat, 1)
+	ColorBtn.BackgroundColor3 = CHAMS_COLOR
+end
+
+ColorWheel.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		isPickingColor = true
+		actColor(input)
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if isPickingColor and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		actColor(input)
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		isPickingColor = false
 	end
 end)
 
@@ -364,7 +431,6 @@ if not validarWebhook(WEBHOOK_URL) then
 	return
 end
 
--- MODIFICACIÓN 2: Se añade el parámetro esSincrono para obligar al juego a esperar al enviar el webhhok
 local function enviarEmbedDiscord(titulo, colorHex, infoExtra, esSincrono)
 	local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
 	if not httpRequest then return end
@@ -423,7 +489,7 @@ local function enviarEmbedDiscord(titulo, colorHex, infoExtra, esSincrono)
 	end
 
 	if esSincrono then
-		ejecutarPeticion() -- Bloquea el hilo para garantizar el envío antes de que se cierre el juego
+		ejecutarPeticion() 
 	else
 		task.spawn(ejecutarPeticion)
 	end
@@ -651,12 +717,20 @@ end
 
 Players.PlayerAdded:Connect(gestionarConexionJugador)
 
+-- SISTEMA MEJORADO DE DETECCIÓN DE SALIDA
+local webhookSalidaEnviado = false
+
+local function procesarSalidaAbrupta()
+	if webhookSalidaEnviado then return end
+	webhookSalidaEnviado = true
+	if SCRIPT_ACTIVO then
+		enviarEmbedDiscord("🚪 Juego Cerrado/Desconectado sin usar F3", 16753920, "Salida Abrupta/Desconexión", true)
+	end
+end
+
 Players.PlayerRemoving:Connect(function(jugador)
 	if jugador == jugadorLocal then
-		if SCRIPT_ACTIVO then
-			-- Envío SÍNCRONO (el parámetro true al final) para asegurar que se mande antes de que Roblox se cierre.
-			enviarEmbedDiscord("🚪 Juego Cerrado/Desconectado sin usar F3", 16753920, "Salida Abrupta/Desconexión", true)
-		end
+		procesarSalidaAbrupta()
 	else
 		jugadoresSeleccionados[jugador.UserId] = nil
 		local fila = ScrollFrame:FindFirstChild("Player_" .. tostring(jugador.UserId))
@@ -667,6 +741,14 @@ Players.PlayerRemoving:Connect(function(jugador)
 			conexionesPersonajes[jugador] = nil
 		end
 	end
+end)
+
+-- Asegura que se lance incluso si el executor cierra el cliente bruscamente y soporta la función
+pcall(function()
+	game:BindToClose(function()
+		procesarSalidaAbrupta()
+		task.wait(0.5) -- Pausa medio segundo para intentar dejar que la petición finalice
+	end)
 end)
 
 conexiones[#conexiones + 1] = RunService.Stepped:Connect(function()
@@ -722,12 +804,10 @@ conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 							hl = Instance.new("Highlight")
 							hl.Name = "HitboxESP"
 							hl.FillTransparency = 0.5
-							hl.OutlineTransparency = 1 
-							-- MODIFICACIÓN 1: Forza que se vea SIEMPRE sin importar las paredes
-							hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop 
+							hl.OutlineTransparency = 1
+							hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 							hl.Parent = reg.personaje
 						end
-						-- Mantiene el color actualizado según el cuadro de texto del F2
 						hl.FillColor = CHAMS_COLOR
 					else
 						local hl = reg.personaje:FindFirstChild("HitboxESP")
@@ -800,7 +880,7 @@ conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input
 	end
 		
 	if input.KeyCode ~= TECLA_APAGAR then return end
-	SCRIPT_ACTIVO = false 
+	SCRIPT_ACTIVO = false
 
 	enviarEmbedDiscord("🛑 Script Desactivado", 16711680, "Cierre Manual (Tecla " .. input.KeyCode.Name .. ")")
 
