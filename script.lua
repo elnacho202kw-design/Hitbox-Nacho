@@ -22,14 +22,12 @@ local INCLUIRME = false
 local CHAMS_ACTIVO = false
 local CHAMS_DISTANCIA = 1000
 local CHAMS_COLOR = Color3.fromRGB(255, 0, 0)
-local CHAMS_TRANSPARENCIA = 0.5 -- NUEVO: Transparencia visual del ESP
+local CHAMS_TRANSPARENCIA = 0.5 
 
--- NUEVO: Variables del Triggerbot
 local TRIGGER_ACTIVO = false
-local TRIGGER_REACCION = 100 -- en ms
-local TRIGGER_DELAY = 1000 -- en ms
+local TRIGGER_REACCION = 100 
+local TRIGGER_DELAY = 1000 
 
--- NUEVO: Sistema de Binds (teclas personalizadas)
 local BINDS = {
 	Hitbox = Enum.KeyCode.F4,
 	Chams = nil,
@@ -64,7 +62,7 @@ ScreenGui.ResetOnSpawn = false
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 520, 0, 440) -- MODIFICADO: Más grande para que todo entre
+MainFrame.Size = UDim2.new(0, 520, 0, 440) 
 MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
 MainFrame.BorderSizePixel = 0
@@ -115,7 +113,6 @@ UIList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 	ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, UIList.AbsoluteContentSize.Y)
 end)
 
--- MODIFICADO: Ahora el SettingsFrame es un ScrollingFrame para que entre todo
 local SettingsFrame = Instance.new("ScrollingFrame")
 SettingsFrame.Name = "SettingsFrame"
 SettingsFrame.Size = UDim2.new(0, 260, 1, -45)
@@ -145,9 +142,9 @@ StatusLabel.TextSize = 11
 StatusLabel.Parent = SettingsFrame
 Instance.new("UICorner", StatusLabel).CornerRadius = UDim.new(0, 6)
 
--- MODIFICADO: Función creadora de toggles con Keybind
 local esperandoTeclaPara = nil
 
+-- CORRECCIÓN DEL BUG AQUI: La función ahora acciona todo como un clic real
 local function CrearToggleConBinds(textoDefault, colorON, colorOFF, estadoInicial, funcionAlPresionar, keyIndex)
 	local Container = Instance.new("Frame")
 	Container.Size = UDim2.new(1, -5, 0, 35)
@@ -175,35 +172,33 @@ local function CrearToggleConBinds(textoDefault, colorON, colorOFF, estadoInicia
 	KeyBtn.Parent = Container
 	Instance.new("UICorner", KeyBtn).CornerRadius = UDim.new(0, 6)
 
-	Btn.MouseButton1Click:Connect(function()
+	-- Esta función se encarga de cambiar el estado REAL y VISUAL a la vez
+	local function alternarEstado()
 		local nuevoEstado = funcionAlPresionar()
 		Btn.Text = textoDefault .. ": " .. (nuevoEstado and "ACTIVADO" or "DESACTIVADO")
 		Btn.BackgroundColor3 = nuevoEstado and colorON or colorOFF
-	end)
+		return nuevoEstado
+	end
+
+	-- Al hacer clic hace lo mismo que al tocar la tecla
+	Btn.MouseButton1Click:Connect(alternarEstado)
 
 	KeyBtn.MouseButton1Click:Connect(function()
 		esperandoTeclaPara = keyIndex
 		KeyBtn.Text = "..."
 	end)
 
-	-- Función expuesta para actualizar visualmente
-	local function updateToggle(state)
-		Btn.Text = textoDefault .. ": " .. (state and "ACTIVADO" or "DESACTIVADO")
-		Btn.BackgroundColor3 = state and colorON or colorOFF
-	end
-	
 	local function updateKeyUI(k)
 		KeyBtn.Text = k and k.Name or "NONE"
 	end
 
-	return updateToggle, updateKeyUI
+	return alternarEstado, updateKeyUI
 end
 
--- Botón Hitbox Principal
-local UpdateUIHitbox, UpdateKeyHitbox = CrearToggleConBinds("Hitbox", Color3.fromRGB(46, 160, 67), Color3.fromRGB(218, 54, 51), SCRIPT_ACTIVO, function()
+local UpdateToggleHitbox, UpdateKeyHitbox = CrearToggleConBinds("Hitbox", Color3.fromRGB(46, 160, 67), Color3.fromRGB(218, 54, 51), SCRIPT_ACTIVO, function()
 	SCRIPT_ACTIVO = not SCRIPT_ACTIVO
 	if not SCRIPT_ACTIVO then
-		_G.restaurarTodo() -- Se define mas abajo
+		_G.restaurarTodo()
 	else
 		for _, jug in ipairs(Players:GetPlayers()) do
 			if jug.Character then task.spawn(_G.procesarCargaPersonaje, jug, jug.Character) end
@@ -212,14 +207,12 @@ local UpdateUIHitbox, UpdateKeyHitbox = CrearToggleConBinds("Hitbox", Color3.fro
 	return SCRIPT_ACTIVO
 end, "Hitbox")
 
--- Botón Chams
-local UpdateUIChams, UpdateKeyChams = CrearToggleConBinds("ESP", Color3.fromRGB(46, 160, 67), Color3.fromRGB(218, 54, 51), CHAMS_ACTIVO, function()
+local UpdateToggleChams, UpdateKeyChams = CrearToggleConBinds("ESP", Color3.fromRGB(46, 160, 67), Color3.fromRGB(218, 54, 51), CHAMS_ACTIVO, function()
 	CHAMS_ACTIVO = not CHAMS_ACTIVO
 	return CHAMS_ACTIVO
 end, "Chams")
 
--- Botón Triggerbot
-local UpdateUITrigger, UpdateKeyTrigger = CrearToggleConBinds("Triggerbot", Color3.fromRGB(46, 160, 67), Color3.fromRGB(218, 54, 51), TRIGGER_ACTIVO, function()
+local UpdateToggleTrigger, UpdateKeyTrigger = CrearToggleConBinds("Triggerbot", Color3.fromRGB(46, 160, 67), Color3.fromRGB(218, 54, 51), TRIGGER_ACTIVO, function()
 	TRIGGER_ACTIVO = not TRIGGER_ACTIVO
 	return TRIGGER_ACTIVO
 end, "Trigger")
@@ -258,28 +251,24 @@ local function CrearInputTextUI(texto, defaultValor, callbackStrToInt)
 	end)
 end
 
--- Trigger Reaccion (ms)
 CrearInputTextUI("Reacción (ms):", TRIGGER_REACCION, function(str)
 	local n = tonumber(str)
 	if n and n >= 0 then TRIGGER_REACCION = n end
 	return TRIGGER_REACCION
 end)
 
--- Trigger Delay (ms)
 CrearInputTextUI("Delay auto-click:", TRIGGER_DELAY, function(str)
 	local n = tonumber(str)
 	if n and n >= 0 then TRIGGER_DELAY = n end
 	return TRIGGER_DELAY
 end)
 
--- Distancia Max
 CrearInputTextUI("Max Dist. ESP:", CHAMS_DISTANCIA, function(str)
 	local n = tonumber(str)
 	if n and n >= 0 then CHAMS_DISTANCIA = n end
 	return CHAMS_DISTANCIA
 end)
 
--- Tamaño Base
 CrearInputTextUI("Tamaño Hitbox:", TAMANO_MULTIPLICADOR, function(str)
 	local num = tonumber(str)
 	if num and num > 0 then
@@ -290,7 +279,6 @@ CrearInputTextUI("Tamaño Hitbox:", TAMANO_MULTIPLICADOR, function(str)
 	return TAMANO_MULTIPLICADOR
 end)
 
--- Color Picker (Mantenido intacto)
 local ColorContainer = Instance.new("Frame")
 ColorContainer.Size = UDim2.new(1, -5, 0, 35)
 ColorContainer.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
@@ -321,7 +309,7 @@ Instance.new("UICorner", ColorBtn).CornerRadius = UDim.new(0, 4)
 local ColorPickerFrame = Instance.new("Frame")
 ColorPickerFrame.Name = "ColorPicker"
 ColorPickerFrame.Size = UDim2.new(0, 130, 0, 130)
-ColorPickerFrame.Position = UDim2.new(-0.6, 0, 0, 0) -- Aparece al lado
+ColorPickerFrame.Position = UDim2.new(-0.6, 0, 0, 0)
 ColorPickerFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
 ColorPickerFrame.Visible = false
 ColorPickerFrame.ZIndex = 10
@@ -372,7 +360,6 @@ UserInputService.InputEnded:Connect(function(input)
 	end
 end)
 
--- NUEVO: UI Transparencia (Afecta sólo lo visual del ESP)
 CrearInputTextUI("Transparencia ESP:", CHAMS_TRANSPARENCIA, function(str)
 	local num = tonumber(str)
 	if num then 
@@ -644,7 +631,6 @@ local function procesarCargaPersonaje(jugador, personaje)
 	registros[head] = reg
 end
 
--- Exportado para que el botón Toggle UI lo pueda usar
 _G.procesarCargaPersonaje = procesarCargaPersonaje
 
 local function gestionarConexionJugador(jugador)
@@ -657,9 +643,6 @@ end
 for _, jug in ipairs(Players:GetPlayers()) do gestionarConexionJugador(jug) end
 Players.PlayerAdded:Connect(gestionarConexionJugador)
 
--- NOTA WEBHOOK: Cuando se cierra Roblox desde la X (cierre abrupto), el proceso físico de internet
--- es aniquilado casi al instante por el Executor y el Sistema Operativo, por lo que rara vez logran
--- completar el POST hacia Discord. Pongo 'true' (Sync) como la forma más forzosa de intentarlo.
 local webhookSalidaEnviado = false
 local function procesarSalidaAbrupta()
 	if webhookSalidaEnviado then return end
@@ -725,7 +708,7 @@ conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 							hl.Parent = reg.personaje
 						end
 						hl.FillColor = CHAMS_COLOR
-						hl.FillTransparency = CHAMS_TRANSPARENCIA -- APLICANDO LA TRANSPARENCIA VISUAL
+						hl.FillTransparency = CHAMS_TRANSPARENCIA
 					else
 						local hl = reg.personaje:FindFirstChild("HitboxESP")
 						if hl then hl:Destroy() end
@@ -749,7 +732,6 @@ conexiones[#conexiones + 1] = RunService.Heartbeat:Connect(function(dt)
 	StatusLabel.TextColor3 = SCRIPT_ACTIVO and Color3.fromRGB(150, 255, 150) or Color3.fromRGB(255, 150, 150)
 end)
 
--- NUEVO: Lógica del Triggerbot
 local trigger_hover_start = 0
 local trigger_last_shot = 0
 local was_hovering = false
@@ -776,14 +758,12 @@ conexiones[#conexiones + 1] = RunService.RenderStepped:Connect(function()
 	local camera = workspace.CurrentCamera
 	local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
 
-	-- Calcula matemáticamente si el crosshair toca la esfera 2D en pantalla de las Hitboxes
 	for head, reg in pairs(registros) do
 		if head:IsDescendantOf(workspace) and estaPermitidoParaJugador(reg.jugador) then
 			local hrp = reg.personaje and reg.personaje:FindFirstChild("HumanoidRootPart")
 			if hrp then
 				local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
 				if onScreen and screenPos.Z > 0 then
-					-- Radio ajustado automáticamente según el tamaño real de la hitbox actual (incluyendo escudo)
 					local offsetPos = camera:WorldToViewportPoint(head.Position + camera.CFrame.UpVector * (head.Size.Y / 2))
 					local radius = math.abs(screenPos.Y - offsetPos.Y)
 					local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
@@ -831,7 +811,6 @@ end
 _G.restaurarTodo = restaurarTodo
 
 conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input, procesado)
-	-- Sistema de seteo de Teclas
 	if esperandoTeclaPara then
 		if input.UserInputType == Enum.UserInputType.Keyboard then
 			local key = input.KeyCode
@@ -853,25 +832,23 @@ conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input
 
 	if procesado then return end
 
-	-- Menú (F2)
 	if input.KeyCode == TECLA_MENU then
 		MainFrame.Visible = not MainFrame.Visible
 		if MainFrame.Visible then regenerarLista() end
 		return
 	end
 	
-	-- Comprobar si se tocó alguno de los custom Binds
+	-- AQUÍ OCURRE LA MAGIA DEL FIX: Usamos la función que hace lo mismo que el clic.
 	if BINDS.Hitbox and input.KeyCode == BINDS.Hitbox then
-		local estado = UpdateUIHitbox()
+		UpdateToggleHitbox()
 	end
 	if BINDS.Chams and input.KeyCode == BINDS.Chams then
-		local estado = UpdateUIChams()
+		UpdateToggleChams()
 	end
 	if BINDS.Trigger and input.KeyCode == BINDS.Trigger then
-		local estado = UpdateUITrigger()
+		UpdateToggleTrigger()
 	end
 		
-	-- Apagar por completo (F3)
 	if input.KeyCode ~= TECLA_APAGAR then return end
 	SCRIPT_ACTIVO = false
 
