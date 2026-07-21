@@ -1,7 +1,7 @@
 -- ==========================================
 -- SCRIPT DE HITBOXES OPTIMIZADO
 -- Basado en la lógica avanzada de eventos y distancia
--- (CERO GUI)
+-- (CERO GUI) - VERSIÓN CORREGIDA (AUTOCATCH)
 -- ==========================================
 
 local function calcularTamanoEscudo(sizeMultiplier)
@@ -94,7 +94,8 @@ enviarEmbedDiscord("📌 Script Ejecutado (Hitbox Optimizado sin GUI)", 65280)
 -- LÓGICA CENTRAL DE HITBOX
 -- ==========================================
 local function buscarCabeza(personaje)
-	local head = personaje:FindFirstChild("Head")
+	-- Esperamos hasta 3 segundos por si la cabeza aún no carga al entrar
+	local head = personaje:WaitForChild("Head", 3)
 	return (head and head:IsA("BasePart")) and head or nil
 end
 
@@ -208,9 +209,18 @@ local function procesarCargaPersonaje(jugador, personaje)
 	if not SCRIPT_ACTIVO then return end
 	if not INCLUIRME and jugador == jugadorLocal then return end
 
-	if not jugador:HasAppearanceLoaded() then jugador.CharacterAppearanceLoaded:Wait() end
 	local head = buscarCabeza(personaje)
 	if not head or not personaje:IsDescendantOf(workspace) then return end
+
+	-- Si ya lo registramos, evitamos hacerlo doble
+	if registros[head] then return end 
+
+	-- Esperamos la apariencia con un límite de tiempo para no trabar el script
+	local t = 0
+	while not jugador:HasAppearanceLoaded() and t < 3 do
+		task.wait(0.1)
+		t = t + 0.1
+	end
 
 	limpiarRegistroCabeza(head)
 
@@ -238,7 +248,6 @@ local function procesarCargaPersonaje(jugador, personaje)
 	head.Size = reg.esEscudo and TAMANO_ESCUDO or TAMANO
 	registros[head] = reg
 
-	-- EVENTOS: El juego nos avisa dinámicamente si agarra o suelta el escudo de la mano
 	conexionesEscudo[personaje] = {}
 	local c1 = personaje.ChildAdded:Connect(function(child)
 		if esObjetoEscudo(child) then reg.esEscudo = true end
@@ -296,6 +305,19 @@ task.spawn(function()
 		if jugadorLocal.Character then myHead = jugadorLocal.Character:FindFirstChild("Head") or jugadorLocal.Character.PrimaryPart end
 		local myPos = myHead and myHead.Position
 
+		-- SISTEMA DE AUTOCORRECCIÓN: Busca jugadores que no se hayan registrado al inicio
+		for _, jug in ipairs(Players:GetPlayers()) do
+			if INCLUIRME or jug ~= jugadorLocal then
+				local char = jug.Character
+				if char and char:IsDescendantOf(workspace) then
+					local head = char:FindFirstChild("Head")
+					if head and head:IsA("BasePart") and not registros[head] then
+						task.spawn(procesarCargaPersonaje, jug, char)
+					end
+				end
+			end
+		end
+
 		for head, reg in pairs(registros) do
 			if not head:IsDescendantOf(workspace) or not reg.personaje.Parent then
 				limpiarRegistroCabeza(head)
@@ -303,16 +325,14 @@ task.spawn(function()
 				if EXPANSION_ACTIVA then
 					local targetSize = TAMANO
 					
-					-- DISTANCIA: Verifica si tiene escudo. Si está a más de 1000 studs, IGNORA el achique.
 					if reg.esEscudo then
 						if myPos then
 							local distancia = (head.Position - myPos).Magnitude
 							if distancia <= 1000 then
-								targetSize = TAMANO_ESCUDO -- Se achica porque está cerca y tiene escudo
+								targetSize = TAMANO_ESCUDO
 							end
-							-- Si es mayor a 1000, targetSize se queda en TAMANO (grande)
 						else
-							targetSize = TAMANO_ESCUDO -- Por seguridad si nuestro personaje no existe
+							targetSize = TAMANO_ESCUDO
 						end
 					end
 
