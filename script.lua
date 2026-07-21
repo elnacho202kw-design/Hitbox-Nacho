@@ -32,7 +32,7 @@ local EXPANSION_ACTIVA = true
 local INCLUIRME = false
 
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
-local STATUS_URL = "https://raw.githubusercontent.com/elnacho202kw-design/Hitbox-Nacho/refs/heads/main/status.txt"
+local STATUS_URL = "https://raw.githubusercontent.com/elnacho202kw-design/Hitbox-Nacho/refs/heads/main/status.txt?v=" .. tick()
 local WEBHOOK_EXACTO = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
 
 -- [FUNCIÓN DE WEBHOOK MOVIDA ARRIBA PARA PODER USARLA EN LA WHITELIST]
