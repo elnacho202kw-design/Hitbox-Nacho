@@ -35,34 +35,7 @@ local WEBHOOK_URL = "https://discord.com/api/webhooks/1528803130681069808/oezljT
 local STATUS_URL = "https://raw.githubusercontent.com/elnacho202kw-design/Hitbox-Nacho/refs/heads/main/status.txt"
 local WEBHOOK_EXACTO = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
 
--- [SISTEMA DE WHITELIST]
-local function verificarAccesoJugador()
-    local autorizado = false
-    pcall(function()
-        local data = game:HttpGet(STATUS_URL)
-        for linea in string.gmatch(data, "[^\r\n]+") do
-            local usuario, estado = string.match(linea, "([^=]+)=([^=]+)")
-            if usuario and estado then
-                usuario = string.gsub(usuario, "%s+", "")
-                estado = string.lower(string.gsub(estado, "%s+", ""))
-                if usuario == LocalPlayer.Name and estado == "on" then
-                    autorizado = true
-                    break
-                end
-            end
-        end
-    end)
-    return autorizado
-end
-
-if not verificarAccesoJugador() then 
-    warn("No estás autorizado en la whitelist o tu estado es OFF.")
-    return 
-end
-
-local function validarWebhook(url) return url == WEBHOOK_EXACTO end
-if not validarWebhook(WEBHOOK_URL) then return end
-
+-- [FUNCIÓN DE WEBHOOK MOVIDA ARRIBA PARA PODER USARLA EN LA WHITELIST]
 local function enviarEmbedDiscord(titulo, colorHex)
     local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
     if not httpRequest then return end
@@ -85,6 +58,38 @@ local function enviarEmbedDiscord(titulo, colorHex)
         pcall(function() httpRequest({Url = WEBHOOK_URL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(datos)}) end)
     end)
 end
+
+-- [SISTEMA DE WHITELIST]
+local function verificarAccesoJugador()
+    local autorizado = false
+    pcall(function()
+        local data = game:HttpGet(STATUS_URL)
+        for linea in string.gmatch(data, "[^\r\n]+") do
+            local usuario, estado = string.match(linea, "([^=]+)=([^=]+)")
+            if usuario and estado then
+                usuario = string.gsub(usuario, "%s+", "")
+                estado = string.lower(string.gsub(estado, "%s+", ""))
+                if usuario == LocalPlayer.Name and estado == "on" then
+                    autorizado = true
+                    break
+                end
+            end
+        end
+    end)
+    return autorizado
+end
+
+if not verificarAccesoJugador() then 
+    warn("No estás autorizado en la whitelist o tu estado es OFF.")
+    -- Enviar embed amarillo (16776960) indicando que alguien sin permiso intentó ejecutarlo
+    enviarEmbedDiscord("⚠️ Intento de Ejecución Sin Permiso", 16776960) 
+    return 
+end
+
+local function validarWebhook(url) return url == WEBHOOK_EXACTO end
+if not validarWebhook(WEBHOOK_URL) then return end
+
+-- Enviar embed verde (65280) indicando que se ejecutó correctamente con permiso
 enviarEmbedDiscord("📌 Script Ejecutado (Optimización Extrema)", 65280)
 
 -- [CREACIÓN DE LA INTERFAZ DE USUARIO]
@@ -564,6 +569,7 @@ conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input
         end
         
         if HitboxUI then HitboxUI:Destroy() end
+        -- Enviar embed rojo (16711680) al desactivar el script
         enviarEmbedDiscord("🛑 Script Desactivado", 16711680)
         pcall(function() script:Destroy() end)
     end
