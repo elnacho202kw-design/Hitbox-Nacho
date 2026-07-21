@@ -15,7 +15,7 @@ local function calcularTamanoEscudo(sizeMultiplier)
 	end
 end
 
-local TAMANO_MULTIPLICADOR = 3
+local TAMANO_MULTIPLICADOR = 2.5
 local TAMANO = Vector3.new(TAMANO_MULTIPLICADOR, TAMANO_MULTIPLICADOR, TAMANO_MULTIPLICADOR)
 local TAMANO_ESCUDO = calcularTamanoEscudo(TAMANO_MULTIPLICADOR)
 
