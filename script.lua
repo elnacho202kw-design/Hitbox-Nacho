@@ -35,7 +35,6 @@ local WEBHOOK_URL = "https://discord.com/api/webhooks/1528803130681069808/oezljT
 local STATUS_URL = "https://raw.githubusercontent.com/elnacho202kw-design/Hitbox-Nacho/refs/heads/main/status.txt?v=" .. tick()
 local WEBHOOK_EXACTO = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
 
--- [FUNCIÓN DE WEBHOOK MOVIDA ARRIBA PARA PODER USARLA EN LA WHITELIST]
 local function enviarEmbedDiscord(titulo, colorHex)
     local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
     if not httpRequest then return end
@@ -59,7 +58,6 @@ local function enviarEmbedDiscord(titulo, colorHex)
     end)
 end
 
--- [SISTEMA DE WHITELIST]
 local function verificarAccesoJugador()
     local autorizado = false
     pcall(function()
@@ -90,7 +88,6 @@ if not validarWebhook(WEBHOOK_URL) then return end
 
 enviarEmbedDiscord("📌 Script Ejecutado (Optimización Extrema)", 65280)
 
--- [CREACIÓN DE LA INTERFAZ DE USUARIO]
 local uiParent = nil
 pcall(function() uiParent = CoreGui end)
 if not uiParent then uiParent = LocalPlayer:WaitForChild("PlayerGui") end
@@ -102,7 +99,7 @@ HitboxUI.Parent = uiParent
 HitboxUI.Enabled = false
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 320, 0, 480)
+MainFrame.Size = UDim2.new(0, 320, 0, 480) 
 MainFrame.Position = UDim2.new(0.5, -160, 0.5, -240)
 MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 MainFrame.BorderSizePixel = 0
@@ -133,7 +130,6 @@ Title.TextSize = 14
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = TopBar
 
--- [NUEVO: PANEL DE CONFIGURACIÓN - KEYBIND Y SLIDER]
 local SettingsFrame = Instance.new("Frame")
 SettingsFrame.Size = UDim2.new(1, -20, 0, 80)
 SettingsFrame.Position = UDim2.new(0, 10, 0, 50)
@@ -141,7 +137,6 @@ SettingsFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 SettingsFrame.Parent = MainFrame
 Instance.new("UICorner", SettingsFrame).CornerRadius = UDim.new(0, 6)
 
--- Botón de Keybind
 local KeybindBtn = Instance.new("TextButton")
 KeybindBtn.Size = UDim2.new(1, -10, 0, 26)
 KeybindBtn.Position = UDim2.new(0, 5, 0, 5)
@@ -160,7 +155,6 @@ KeybindBtn.MouseButton1Click:Connect(function()
     KeybindBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 end)
 
--- Slider de Tamaño
 local SizeLabel = Instance.new("TextLabel")
 SizeLabel.Size = UDim2.new(1, -10, 0, 20)
 SizeLabel.Position = UDim2.new(0, 5, 0, 35)
@@ -193,7 +187,6 @@ SliderKnob.Text = ""
 SliderKnob.Parent = SliderFill
 Instance.new("UICorner", SliderKnob).CornerRadius = UDim.new(1, 0)
 
--- Ajuste de lista de jugadores hacia abajo
 local ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Size = UDim2.new(1, -20, 1, -150)
 ScrollFrame.Position = UDim2.new(0, 10, 0, 140)
@@ -206,7 +199,6 @@ local UIListLayout = Instance.new("UIListLayout")
 UIListLayout.Padding = UDim.new(0, 8)
 UIListLayout.Parent = ScrollFrame
 
--- Movimiento de la ventana
 local dragToggle, dragStart, startPos
 TopBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -221,7 +213,6 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Funciones Actualizar variables globales
 local ActualizarEstadoJugador
 
 local function AplicarNuevoTamano(nuevoValor)
@@ -234,7 +225,6 @@ local function AplicarNuevoTamano(nuevoValor)
     end
 end
 
--- Lógica del Slider
 local arrastrandoSlider = false
 SliderKnob.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -261,7 +251,7 @@ UserInputService.InputChanged:Connect(function(input)
         local valorMin = 2.5
         local valorMax = 10.0
         local valorReal = valorMin + (porcentaje * (valorMax - valorMin))
-        valorReal = math.floor(valorReal * 10) / 10
+        valorReal = math.floor(valorReal * 10) / 10 
         
         SliderFill.Size = UDim2.new(porcentaje, 0, 1, 0)
         SizeLabel.Text = "Tamaño Hitbox: " .. tostring(valorReal)
@@ -270,7 +260,6 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Funciones de Interfaz de Jugadores
 local function actualizarContadorUI()
     local count = 0
     for _ in pairs(filasUI) do count = count + 1 end
@@ -375,8 +364,13 @@ ActualizarEstadoJugador = function(jugador, tieneEscudoNuevo)
     local activadoEnJugador = (EXPANSION_ACTIVA and estadoJugadores[jugador] ~= false)
 
     if activadoEnJugador then
+        local targetSize = reg.esEscudo and TAMANO_ESCUDO or TAMANO
+        if head.Size ~= targetSize then head.Size = targetSize end
+        if visualEscalaConSize(head) and head.Transparency ~= 1 then head.Transparency = 1 end
         if reg.fake and reg.fake.Parent == nil then reg.fake.Parent = head.Parent end
     else
+        if head.Size ~= reg.size then head.Size = reg.size end
+        if visualEscalaConSize(head) and head.Transparency ~= reg.transp then head.Transparency = reg.transp end
         if reg.fake and reg.fake.Parent ~= nil then reg.fake.Parent = nil end
     end
 end
@@ -413,20 +407,21 @@ local function MonitorearEscudoPersonaje(jugador, personaje)
                 for _, c in ipairs(conexionesEscudo[personaje]) do c:Disconnect() end
                 conexionesEscudo[personaje] = nil
             end
+            
+            -- FIX 1: Restaurar y limpiar el registro para evitar la hitbox fantasma en el suelo al morir
+            local head = buscarCabeza(personaje)
+            if head and registros[head] then
+                local reg = registros[head]
+                head.Size = reg.size
+                head.Transparency = reg.transp
+                head.CanCollide = reg.canCollide
+                if reg.collider then reg.collider:Destroy() end
+                if reg.fake then reg.fake:Destroy() end
+                registros[head] = nil
+            end
+            
             if cDied then cDied:Disconnect() end
         end)
-    end
-end
-
--- FIX: Limpieza de registros para evitar hitboxes fantasma (cajas rojas flotantes)
-local function limpiarRegistrosPersonaje(jugador)
-    for head, reg in pairs(registros) do
-        if reg.jugador == jugador then
-            if reg.collider then reg.collider:Destroy() end
-            if reg.fake then reg.fake:Destroy() end
-            if reg.plantilla then reg.plantilla:Destroy() end
-            registros[head] = nil
-        end
     end
 end
 
@@ -464,22 +459,27 @@ local function procesarCargaPersonaje(jugador, personaje)
     registros[head] = reg
 
     MonitorearEscudoPersonaje(jugador, personaje)
+    
+    -- FIX 2: Llamar la actualización directamente tras cargar el personaje para que al acercarte se aplique sola.
+    ActualizarEstadoJugador(jugador, nil)
 end
 
 local function gestionarConexionJugador(jugador)
-    -- FIX: Limpiamos hitboxes antiguas cuando el personaje muere o desaparece
-    local cAdded = jugador.CharacterAdded:Connect(function(personaje)
-        limpiarRegistrosPersonaje(jugador)
+    conexionesPersonajes[jugador] = jugador.CharacterAdded:Connect(function(personaje)
         procesarCargaPersonaje(jugador, personaje)
     end)
     
-    local cRemoving = jugador.CharacterRemoving:Connect(function(personaje)
-        limpiarRegistrosPersonaje(jugador)
+    -- FIX 3: Limpiar registros antiguos por si el personaje es eliminado abruptamente
+    jugador.CharacterRemoving:Connect(function(personaje)
+        local head = personaje:FindFirstChild("Head")
+        if head and registros[head] then
+            local reg = registros[head]
+            if reg.collider then reg.collider:Destroy() end
+            if reg.fake then reg.fake:Destroy() end
+            registros[head] = nil
+        end
     end)
 
-    -- Guardamos ambas conexiones para limpiarlas después
-    conexionesPersonajes[jugador] = {cAdded, cRemoving}
-    
     if jugador.Character then task.spawn(procesarCargaPersonaje, jugador, jugador.Character) end
 end
 
@@ -498,7 +498,6 @@ end)
 Players.PlayerRemoving:Connect(function(jugador)
     estadoJugadores[jugador] = nil
     cabezasGuardadas[jugador] = nil
-    limpiarRegistrosPersonaje(jugador) -- Asegura que no queden partes si el jugador sale del juego
 
     if filasUI[jugador] then
         filasUI[jugador]:Destroy()
@@ -507,36 +506,25 @@ Players.PlayerRemoving:Connect(function(jugador)
     end
 
     if conexionesPersonajes[jugador] then 
-        for _, c in ipairs(conexionesPersonajes[jugador]) do c:Disconnect() end
+        conexionesPersonajes[jugador]:Disconnect()
         conexionesPersonajes[jugador] = nil 
     end
-    
     if jugador.Character and conexionesEscudo[jugador.Character] then
         for _, c in ipairs(conexionesEscudo[jugador.Character]) do c:Disconnect() end
         conexionesEscudo[jugador.Character] = nil
     end
 end)
 
--- FIX: Forzar tamaño aquí evita que el juego lo reinicie a tamaño normal, evitando tener que apagar y encender el botón
 conexiones[#conexiones + 1] = RunService.Stepped:Connect(function()
     if not SCRIPT_ACTIVO then return end
     for head, reg in pairs(registros) do
         local activadoEnJugador = (EXPANSION_ACTIVA and estadoJugadores[reg.jugador] ~= false)
-        
         if activadoEnJugador then
             if head.CanCollide then head.CanCollide = false end
             if reg.collider and reg.collider.Parent and not reg.collider.CanCollide then reg.collider.CanCollide = true end
-            
-            local targetSize = reg.esEscudo and TAMANO_ESCUDO or TAMANO
-            if head.Size ~= targetSize then head.Size = targetSize end
-            
-            if visualEscalaConSize(head) and head.Transparency ~= 1 then head.Transparency = 1 end
         else
             if not head.CanCollide and reg.canCollide then head.CanCollide = true end
             if reg.collider and reg.collider.Parent and reg.collider.CanCollide then reg.collider.CanCollide = false end
-            
-            if head.Size ~= reg.size then head.Size = reg.size end
-            if visualEscalaConSize(head) and head.Transparency ~= reg.transp then head.Transparency = reg.transp end
         end
     end
 end)
@@ -558,7 +546,6 @@ task.spawn(function()
     end
 end)
 
--- [Manejador de Inputs: Bindings y Apagado]
 conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input, procesado)
     if cambiandoTecla then
         if input.UserInputType == Enum.UserInputType.Keyboard then
@@ -579,15 +566,7 @@ conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input
     if input.KeyCode == TECLA_APAGAR then
         SCRIPT_ACTIVO = false
         for _, con in ipairs(conexiones) do con:Disconnect() end
-        
-        -- FIX: Desconectar correctamente la tabla de eventos de personaje
-        for _, conCh in pairs(conexionesPersonajes) do 
-            if type(conCh) == "table" then
-                for _, c in ipairs(conCh) do c:Disconnect() end
-            else
-                conCh:Disconnect()
-            end
-        end
+        for _, conCh in pairs(conexionesPersonajes) do conCh:Disconnect() end
         
         for head, stock in pairs(registros) do
             if head:IsDescendantOf(workspace) then
