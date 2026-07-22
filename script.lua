@@ -554,13 +554,20 @@ task.spawn(function()
             end
         end
 
+        -- LOGICA AGREGADA AQUI: Bucle cada 1 segundo que revisa a TODOS forzosamente
         for _, jug in ipairs(Players:GetPlayers()) do
             if INCLUIRME or jug ~= LocalPlayer then
                 local char = jug.Character
                 if char and char:IsDescendantOf(workspace) then
                     local head = char:FindFirstChild("Head")
-                    if head and head:IsA("BasePart") and not registros[head] then
-                        task.spawn(procesarCargaPersonaje, jug, char)
+                    if head and head:IsA("BasePart") then
+                        if not registros[head] then
+                            -- Si por alguna razón no se registró (bug de carga), lo registra aquí.
+                            task.spawn(procesarCargaPersonaje, jug, char)
+                        else
+                            -- Si ya está registrado, fuerza a que el hitbox tome el valor exacto del menú.
+                            ActualizarEstadoJugador(jug, nil)
+                        end
                     end
                 end
             end
