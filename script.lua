@@ -355,9 +355,9 @@ end
 
 ActualizarEstadoJugador = function(jugador, tieneEscudoNuevo)
     local head = cabezasGuardadas[jugador]
-    if not head then return end
+    if not head or not head.Parent then return end
     local reg = registros[head]
-    if not reg or not head.Parent then return end
+    if not reg then return end
 
     if tieneEscudoNuevo ~= nil then reg.esEscudo = tieneEscudoNuevo end
 
@@ -431,12 +431,26 @@ local function procesarCargaPersonaje(jugador, personaje)
     if not SCRIPT_ACTIVO then return end
     if not INCLUIRME and jugador == LocalPlayer then return end
 
+    -- Limpieza previa si el jugador ya tenía un registro anterior activo
+    local cabezaAntigua = cabezasGuardadas[jugador]
+    if cabezaAntigua and registros[cabezaAntigua] then
+        local regAntiguo = registros[cabezaAntigua]
+        if regAntiguo.collider then regAntiguo.collider:Destroy() end
+        if regAntiguo.fake then regAntiguo.fake:Destroy() end
+        registros[cabezaAntigua] = nil
+    end
+
     local head = buscarCabeza(personaje)
     if not head or not personaje:IsDescendantOf(workspace) then return end
-    if registros[head] then return end 
 
     local t = 0
     while not jugador:HasAppearanceLoaded() and t < 3 do task.wait(0.1); t = t + 0.1 end
+
+    -- Asegurar que la cabeza sigue siendo válida tras el yield
+    if not head or not head.Parent then
+        head = buscarCabeza(personaje)
+        if not head then return end
+    end
 
     cabezasGuardadas[jugador] = head
 
@@ -461,13 +475,15 @@ local function procesarCargaPersonaje(jugador, personaje)
     registros[head] = reg
 
     MonitorearEscudoPersonaje(jugador, personaje)
-    
     ActualizarEstadoJugador(jugador, nil)
 end
 
 local function gestionarConexionJugador(jugador)
     conexionesPersonajes[jugador] = jugador.CharacterAdded:Connect(function(personaje)
-        procesarCargaPersonaje(jugador, personaje)
+        task.spawn(function()
+            task.wait(0.2) -- Breve respiro para que el personaje termine de spawnear en workspace de forma limpia
+            procesarCargaPersonaje(jugador, personaje)
+        end)
     end)
     
     jugador.CharacterRemoving:Connect(function(personaje)
@@ -518,13 +534,15 @@ end)
 conexiones[#conexiones + 1] = RunService.Stepped:Connect(function()
     if not SCRIPT_ACTIVO then return end
     for head, reg in pairs(registros) do
-        local activadoEnJugador = (EXPANSION_ACTIVA and estadoJugadores[reg.jugador] ~= false)
-        if activadoEnJugador then
-            if head.CanCollide then head.CanCollide = false end
-            if reg.collider and reg.collider.Parent and not reg.collider.CanCollide then reg.collider.CanCollide = true end
-        else
-            if not head.CanCollide and reg.canCollide then head.CanCollide = true end
-            if reg.collider and reg.collider.Parent and reg.collider.CanCollide then reg.collider.CanCollide = false end
+        if head and head.Parent then
+            local activadoEnJugador = (EXPANSION_ACTIVA and estadoJugadores[reg.jugador] ~= false)
+            if activadoEnJugador then
+                if head.CanCollide then head.CanCollide = false end
+                if reg.collider and reg.collider.Parent and not reg.collider.CanCollide then reg.collider.CanCollide = true end
+            else
+                if not head.CanCollide and reg.canCollide then head.CanCollide = true end
+                if reg.collider and reg.collider.Parent and reg.collider.CanCollide then reg.collider.CanCollide = false end
+            end
         end
     end
 end)
@@ -569,7 +587,7 @@ conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input
         for _, conCh in pairs(conexionesPersonajes) do conCh:Disconnect() end
         
         for head, stock in pairs(registros) do
-            if head:IsDescendantOf(workspace) then
+            if head and head:IsDescendantOf(workspace) then
                 head.Size = stock.size; head.CanCollide = stock.canCollide; head.Transparency = stock.transp
                 for d, t in pairs(stock.decals) do if d.Parent then d.Transparency = t end end
             end
