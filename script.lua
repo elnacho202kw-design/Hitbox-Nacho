@@ -367,10 +367,12 @@ ActualizarEstadoJugador = function(jugador, tieneEscudoNuevo)
         local targetSize = reg.esEscudo and TAMANO_ESCUDO or TAMANO
         if head.Size ~= targetSize then head.Size = targetSize end
         if visualEscalaConSize(head) and head.Transparency ~= 1 then head.Transparency = 1 end
+        for d in pairs(reg.decals) do d.Transparency = 1 end
         if reg.fake and reg.fake.Parent == nil then reg.fake.Parent = head.Parent end
     else
         if head.Size ~= reg.size then head.Size = reg.size end
         if visualEscalaConSize(head) and head.Transparency ~= reg.transp then head.Transparency = reg.transp end
+        for d, t in pairs(reg.decals) do d.Transparency = t end
         if reg.fake and reg.fake.Parent ~= nil then reg.fake.Parent = nil end
     end
 end
@@ -408,13 +410,13 @@ local function MonitorearEscudoPersonaje(jugador, personaje)
                 conexionesEscudo[personaje] = nil
             end
             
-            -- FIX 1: Restaurar y limpiar el registro para evitar la hitbox fantasma en el suelo al morir
             local head = buscarCabeza(personaje)
             if head and registros[head] then
                 local reg = registros[head]
                 head.Size = reg.size
                 head.Transparency = reg.transp
                 head.CanCollide = reg.canCollide
+                for d, t in pairs(reg.decals) do d.Transparency = t end
                 if reg.collider then reg.collider:Destroy() end
                 if reg.fake then reg.fake:Destroy() end
                 registros[head] = nil
@@ -460,7 +462,6 @@ local function procesarCargaPersonaje(jugador, personaje)
 
     MonitorearEscudoPersonaje(jugador, personaje)
     
-    -- FIX 2: Llamar la actualización directamente tras cargar el personaje para que al acercarte se aplique sola.
     ActualizarEstadoJugador(jugador, nil)
 end
 
@@ -469,7 +470,6 @@ local function gestionarConexionJugador(jugador)
         procesarCargaPersonaje(jugador, personaje)
     end)
     
-    -- FIX 3: Limpiar registros antiguos por si el personaje es eliminado abruptamente
     jugador.CharacterRemoving:Connect(function(personaje)
         local head = personaje:FindFirstChild("Head")
         if head and registros[head] then
