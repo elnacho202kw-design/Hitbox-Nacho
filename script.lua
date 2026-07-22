@@ -115,7 +115,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         return 
     end
 
-    enviarEmbedDiscord(WEBHOOK_MAIN, "📌 Script Ejecutado (Optimización Extrema)", 65280)
+    enviarEmbedDiscord(WEBHOOK_MAIN, "📌 Script Ejecutado", 65280)
 
     -- [[ BLOQUE DE CONSTRUCCIÓN DE LA INTERFAZ DE USUARIO (GUI) ]]
     local uiParent = nil
@@ -627,6 +627,37 @@ verificarAccesoJugadorAsync(function(autorizado)
             conexionesEscudo[jugador.Character] = nil
         end
     end)
+
+    -- [[ BLOQUE DE CONTRAMEDIDA PARA KILLCAM (LOCALPLAYER) ]]
+    local function refrescarHitboxesKillcam()
+        for jug, _ in pairs(estadoJugadores) do
+            ActualizarEstadoJugador(jug, nil)
+        end
+    end
+
+    local function monitorearMuerteLocalPlayer(personaje)
+        -- Cuando reapareces: Vuelve a la normalidad (true) y reactiva hitboxes
+        EXPANSION_ACTIVA = true
+        refrescarHitboxesKillcam()
+
+        local humanoid = personaje:WaitForChild("Humanoid", 5)
+        if humanoid then
+            local diedConn
+            diedConn = humanoid.Died:Connect(function()
+                -- En el momento exacto en que mueres (0 delay): Apaga la expansión (false) y contrae hitboxes
+                EXPANSION_ACTIVA = false
+                refrescarHitboxesKillcam()
+                if diedConn then diedConn:Disconnect() end
+            end)
+            -- Se guarda en conexiones para que al pulsar F3 se limpie correctamente
+            conexiones[#conexiones + 1] = diedConn
+        end
+    end
+
+    conexiones[#conexiones + 1] = LocalPlayer.CharacterAdded:Connect(monitorearMuerteLocalPlayer)
+    if LocalPlayer.Character then
+        task.spawn(monitorearMuerteLocalPlayer, LocalPlayer.Character)
+    end
 
     -- [[ BLOQUE DE OPTIMIZACIÓN DEL RUNSERVICE (STEPS) ]]
     local acumuladorTiempo = 0
