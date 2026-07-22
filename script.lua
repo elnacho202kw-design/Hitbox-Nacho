@@ -21,9 +21,11 @@ local distanciasJugadores = {} -- Tabla nueva para gestionar el rendimiento de d
 
 -- [[ BLOQUE DE FUNCIONES MATEMÁTICAS Y CONFIGURACIÓN DE TAMAÑOS ]]
 local function calcularTamanoEscudo(sizeMultiplier)
-    if sizeMultiplier > 3 then return Vector3.new(2, 2, 2.5) end
+    -- CORRECCIÓN: Se invierten los valores de X y Z para que la hitbox lateral sea más ancha 
+    -- y atrape las balas, mientras que el frontal se mantiene detrás del escudo.
+    if sizeMultiplier > 3 then return Vector3.new(2.5, 2, 2) end
     local dif = 3 - sizeMultiplier
-    return Vector3.new(math.max(1, 2 - dif), math.max(1, 2 - dif), math.max(1.5, 2.5 - dif))
+    return Vector3.new(math.max(1.5, 2.5 - dif), math.max(1, 2 - dif), math.max(1, 2 - dif))
 end
 
 local TAMANO_MULTIPLICADOR = 2.5
@@ -418,57 +420,30 @@ verificarAccesoJugadorAsync(function(autorizado)
         end
 
         if aplicarExpansion then
-    if head.Size ~= targetSize then
-        head.Size = targetSize
-    end
-
-    head.Massless = true
-    head.CanTouch = false
-
-    if not head.CanQuery then
-        head.CanQuery = true
-    end
-
-    -- TEMPORAL: hacer visible la cabeza para depurar
-    if visualEscalaConSize(head) then
-        head.Transparency = 0.5
-    end
-
-    for d in pairs(reg.decals) do
-        if d and d.Parent then
-            d.Transparency = 0.5
+            if head.Size ~= targetSize then head.Size = targetSize end
+            
+            -- FIX 1: Evitar subirse encima de la hitbox (Quitar presencia física)
+            head.Massless = true
+            head.CanTouch = false
+            
+            -- FIX 2: Evitar que sea "todo transparente" y que el escudo bloquee el daño 
+            -- (usamos 0.99 para invisibilidad visual pero solidez en raycast)
+            if visualEscalaConSize(head) and head.Transparency ~= 0.99 then head.Transparency = 0.99 end
+            for d in pairs(reg.decals) do if d and d.Parent then d.Transparency = 0.99 end end
+            
+            if reg.fake and reg.fake.Parent == nil then reg.fake.Parent = head.Parent end
+        else
+            if head.Size ~= reg.size then head.Size = reg.size end
+            
+            -- FIX 1 REVERSE: Restaurar físicas cuando está apagado
+            head.Massless = false
+            head.CanTouch = true
+            
+            if visualEscalaConSize(head) and head.Transparency ~= reg.transp then head.Transparency = reg.transp end
+            for d, t in pairs(reg.decals) do if d and d.Parent then d.Transparency = t end end
+            if reg.fake and reg.fake.Parent ~= nil then reg.fake.Parent = nil end
         end
     end
-
-    if reg.fake and reg.fake.Parent == nil then
-        reg.fake.Parent = head.Parent
-    end
-else
-    if head.Size ~= reg.size then
-        head.Size = reg.size
-    end
-
-    head.Massless = false
-    head.CanTouch = true
-
-    if not head.CanQuery then
-        head.CanQuery = true
-    end
-
-    if visualEscalaConSize(head) then
-        head.Transparency = reg.transp
-    end
-
-    for d, t in pairs(reg.decals) do
-        if d and d.Parent then
-            d.Transparency = t
-        end
-    end
-
-    if reg.fake and reg.fake.Parent ~= nil then
-        reg.fake.Parent = nil
-    end
-end
 
     -- [[ BLOQUE DE MANEJO DEL ESCUDO (DETECCIÓN Y MONITOREO) ]]
     local function MonitorearEscudoPersonaje(jugador, personaje)
@@ -512,7 +487,6 @@ end
                         head.Transparency = reg.transp
                         head.CanCollide = reg.canCollide
                         head.CanTouch = true
-                        head.CanQuery = true
                         head.Massless = false
                         for d, t in pairs(reg.decals) do if d and d.Parent then d.Transparency = t end end
                     end
@@ -676,10 +650,6 @@ end
             if aplicarExpansion then
                 if head.CanCollide then head.CanCollide = false end
                 if head.CanTouch then head.CanTouch = false end -- FIX 1 (Evitar física en RunService)
-                
-                -- FIX NUEVO: Forzar CanQuery true en todo momento para evitar que las balas resbalen por los lados
-                if not head.CanQuery then head.CanQuery = true end 
-
                 if reg.collider and reg.collider.Parent and not reg.collider.CanCollide then reg.collider.CanCollide = true end
                 
                 if verificarTamanoPaso then
@@ -805,7 +775,6 @@ end
                     head.Size = stock.size
                     head.CanCollide = stock.canCollide
                     head.CanTouch = true
-                    head.CanQuery = true
                     head.Massless = false
                     head.Transparency = stock.transp
                     for d, t in pairs(stock.decals) do if d and d.Parent then d.Transparency = t end end
