@@ -420,36 +420,20 @@ verificarAccesoJugadorAsync(function(autorizado)
         end
 
         if aplicarExpansion then
-            if head.Size ~= targetSize then 
-                head.Size = targetSize 
-                
-                -- SISTEMA HÍBRIDO: Si es FileMesh, reducimos su escala visual para compensar el tamaño gigante
-                if reg.mesh then
-                    local factorX = reg.size.X / targetSize.X
-                    local factorY = reg.size.Y / targetSize.Y
-                    local factorZ = reg.size.Z / targetSize.Z
-                    reg.mesh.Scale = Vector3.new(reg.meshScale.X * factorX, reg.meshScale.Y * factorY, reg.meshScale.Z * factorZ)
-                end
-            end
+            if head.Size ~= targetSize then head.Size = targetSize end
             
             -- FIX 1: Evitar subirse encima de la hitbox (Quitar presencia física)
             head.Massless = true
             head.CanTouch = false
             
-            -- FIX 2: Invisibilidad solo para los que no usan FileMesh
+            -- FIX 2: Evitar que sea "todo transparente" y que el escudo bloquee el daño 
+            -- (usamos 0.99 para invisibilidad visual pero solidez en raycast)
             if visualEscalaConSize(head) and head.Transparency ~= 0.99 then head.Transparency = 0.99 end
             for d in pairs(reg.decals) do if d and d.Parent then d.Transparency = 0.99 end end
             
             if reg.fake and reg.fake.Parent == nil then reg.fake.Parent = head.Parent end
         else
-            if head.Size ~= reg.size then 
-                head.Size = reg.size 
-                
-                -- SISTEMA HÍBRIDO: Restaurar la escala visual de la malla original
-                if reg.mesh then
-                    reg.mesh.Scale = reg.meshScale
-                end
-            end
+            if head.Size ~= reg.size then head.Size = reg.size end
             
             -- FIX 1 REVERSE: Restaurar físicas cuando está apagado
             head.Massless = false
@@ -459,6 +443,7 @@ verificarAccesoJugadorAsync(function(autorizado)
             for d, t in pairs(reg.decals) do if d and d.Parent then d.Transparency = t end end
             if reg.fake and reg.fake.Parent ~= nil then reg.fake.Parent = nil end
         end
+    end
 
     -- [[ BLOQUE DE MANEJO DEL ESCUDO (DETECCIÓN Y MONITOREO) ]]
     local function MonitorearEscudoPersonaje(jugador, personaje)
@@ -542,18 +527,13 @@ verificarAccesoJugadorAsync(function(autorizado)
             tamanoOriginal = Vector3.new(1.2, 1, 1.2) -- Tamaño estándar de cabeza
         end
 
-        local usaFileMesh = not visualEscalaConSize(head)
-        local specialMesh = usaFileMesh and head:FindFirstChildOfClass("SpecialMesh") or nil
-
         local reg = {
             size = tamanoOriginal, canCollide = head.CanCollide, transp = (head.Transparency == 0.99 and 0 or head.Transparency), decals = {},
-            personaje = personaje, jugador = jugador, esEscudo = false,
-            mesh = specialMesh,
-            meshScale = specialMesh and specialMesh.Scale or nil
+            personaje = personaje, jugador = jugador, esEscudo = false
         }
         reg.collider = crearColisionador(head, reg.size)
 
-if visualEscalaConSize(head) then
+        if visualEscalaConSize(head) then
             for _, d in ipairs(head:GetDescendants()) do if d:IsA("Decal") or d:IsA("Texture") then reg.decals[d] = (d.Transparency == 0.99 and 0 or d.Transparency) end end
             reg.fake, reg.plantilla = crearYColocarVisual(head)
             head.Transparency = 0.99
@@ -567,13 +547,6 @@ if visualEscalaConSize(head) then
 
         registros[head] = reg
 
-        -- FIX: Candado de transparencia (solo para el 99% que usa clones visuales)
-        reg.transpLock = head:GetPropertyChangedSignal("Transparency"):Connect(function()
-           if visualEscalaConSize(head) and head.Size.Magnitude > 3 and head.Transparency < 0.99 then
-                head.Transparency = 0.99
-            end
-        end)
-
         local ancestryCon
         ancestryCon = head.AncestryChanged:Connect(function(_, parent)
             if not parent then
@@ -581,7 +554,6 @@ if visualEscalaConSize(head) then
                     local r = registros[head]
                     if r.collider then pcall(function() r.collider:Destroy() end) end
                     if r.fake then pcall(function() r.fake:Destroy() end) end
-                    if r.transpLock then pcall(function() r.transpLock:Disconnect() end) end -- LA LÍNEA VA AQUÍ ADENTRO
                     registros[head] = nil
                 end
                 if ancestryCon then ancestryCon:Disconnect() end
