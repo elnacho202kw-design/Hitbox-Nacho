@@ -366,7 +366,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         local col = Instance.new("Part")
         col.Name = "ColisionCabeza"; col:SetAttribute("HitboxFalsa", true)
         col.Size = tamanoStock; col.Transparency = 1
-        col.CanCollide = true; col.CanQuery = false; col.CanTouch = false
+        col.CanCollide = true; col.CanQuery = true; col.CanTouch = false
         col.Massless = true; col.CastShadow = false; col.Anchored = false
         col.CFrame = head.CFrame
         local weld = Instance.new("WeldConstraint")
