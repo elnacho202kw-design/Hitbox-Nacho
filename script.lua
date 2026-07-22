@@ -37,7 +37,6 @@ local TECLA_MENU = Enum.KeyCode.F2
 local SCRIPT_ACTIVO = true
 local EXPANSION_ACTIVA = true 
 local INCLUIRME = false
-local estoyVivo = true -- NUEVO: Variable de estado para la contramedida de la killcam
 
 -- [[ BLOQUE DE WEBHOOKS Y SISTEMA DE AUTENTICACIÓN ASÍNCRONA ]]
 local WEBHOOK_MAIN = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
@@ -116,7 +115,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         return 
     end
 
-    enviarEmbedDiscord(WEBHOOK_MAIN, "📌 Script Ejecutado", 65280)
+    enviarEmbedDiscord(WEBHOOK_MAIN, "📌 Script Ejecutado (Optimización Extrema)", 65280)
 
     -- [[ BLOQUE DE CONSTRUCCIÓN DE LA INTERFAZ DE USUARIO (GUI) ]]
     local uiParent = nil
@@ -402,8 +401,7 @@ verificarAccesoJugadorAsync(function(autorizado)
 
         if tieneEscudoNuevo ~= nil then reg.esEscudo = tieneEscudoNuevo end
 
-        -- MODIFICADO: Se agregó la variable "estoyVivo" a la validación principal
-        local activadoEnMenu = (EXPANSION_ACTIVA and estadoJugadores[jugador] ~= false and estoyVivo)
+        local activadoEnMenu = (EXPANSION_ACTIVA and estadoJugadores[jugador] ~= false)
         local distancias = distanciasJugadores[jugador] or {normal = false, escudo = false}
         
         local aplicarExpansion = false
@@ -461,7 +459,6 @@ verificarAccesoJugadorAsync(function(autorizado)
             for d, t in pairs(reg.decals) do if d and d.Parent then d.Transparency = t end end
             if reg.fake and reg.fake.Parent ~= nil then reg.fake.Parent = nil end
         end
-    end
 
     -- [[ BLOQUE DE MANEJO DEL ESCUDO (DETECCIÓN Y MONITOREO) ]]
     local function MonitorearEscudoPersonaje(jugador, personaje)
@@ -556,7 +553,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         }
         reg.collider = crearColisionador(head, reg.size)
 
-        if visualEscalaConSize(head) then
+if visualEscalaConSize(head) then
             for _, d in ipairs(head:GetDescendants()) do if d:IsA("Decal") or d:IsA("Texture") then reg.decals[d] = (d.Transparency == 0.99 and 0 or d.Transparency) end end
             reg.fake, reg.plantilla = crearYColocarVisual(head)
             head.Transparency = 0.99
@@ -584,7 +581,7 @@ verificarAccesoJugadorAsync(function(autorizado)
                     local r = registros[head]
                     if r.collider then pcall(function() r.collider:Destroy() end) end
                     if r.fake then pcall(function() r.fake:Destroy() end) end
-                    if r.transpLock then pcall(function() r.transpLock:Disconnect() end) end 
+                    if r.transpLock then pcall(function() r.transpLock:Disconnect() end) end -- LA LÍNEA VA AQUÍ ADENTRO
                     registros[head] = nil
                 end
                 if ancestryCon then ancestryCon:Disconnect() end
@@ -594,33 +591,6 @@ verificarAccesoJugadorAsync(function(autorizado)
         MonitorearEscudoPersonaje(jugador, personaje)
         ActualizarEstadoJugador(jugador, nil)
     end
-
-    -- [[ NUEVO: BLOQUE DE CONTRAMEDIDA KILLCAM (ESTADO DE VIDA LOCAL) ]]
-    local function actualizarEstadoVital(vivo)
-        estoyVivo = vivo
-        -- Forzar la actualización instantánea del tamaño de todos los jugadores cuando morimos/nacemos
-        for jug, _ in pairs(estadoJugadores) do
-            ActualizarEstadoJugador(jug, nil)
-        end
-    end
-
-    local function manejarPersonajeLocal(personaje)
-        local hum = personaje:WaitForChild("Humanoid", 5)
-        if hum then
-            actualizarEstadoVital(true)
-            hum.Died:Connect(function()
-                actualizarEstadoVital(false)
-            end)
-        end
-    end
-
-    if LocalPlayer.Character then
-        task.spawn(manejarPersonajeLocal, LocalPlayer.Character)
-    end
-    LocalPlayer.CharacterAdded:Connect(function(personaje)
-        task.spawn(manejarPersonajeLocal, personaje)
-    end)
-    -- [[ FIN DEL BLOQUE DE CONTRAMEDIDA ]]
 
     -- [[ BLOQUE DE EVENTOS DE ENTRADA Y SALIDA DE JUGADORES ]]
     local function gestionarConexionJugador(jugador)
@@ -701,8 +671,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         for head, reg in pairs(registros) do
             if not head or not head.Parent then continue end
 
-            -- MODIFICADO: Se agregó la variable "estoyVivo" a la validación del loop rápido
-            local activadoEnMenu = (EXPANSION_ACTIVA and estadoJugadores[reg.jugador] ~= false and estoyVivo)
+            local activadoEnMenu = (EXPANSION_ACTIVA and estadoJugadores[reg.jugador] ~= false)
             local distancias = distanciasJugadores[reg.jugador] or {normal = false, escudo = false}
             local aplicarExpansion = (activadoEnMenu and distancias.normal)
 
