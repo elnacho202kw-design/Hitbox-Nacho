@@ -424,13 +424,16 @@ verificarAccesoJugadorAsync(function(autorizado)
                 head.Size = targetSize 
                 
                 -- SISTEMA HÍBRIDO: Si es FileMesh, reducimos su escala visual para compensar el tamaño gigante
+                -- SISTEMA HÍBRIDO MEJORADO: Corrige la deformación de mallas con textura
                 if reg.mesh and reg.meshScale then
                     local factorX = reg.size.X / targetSize.X
                     local factorY = reg.size.Y / targetSize.Y
                     local factorZ = reg.size.Z / targetSize.Z
-                    reg.mesh.Scale = Vector3.new(reg.meshScale.X * factorX, reg.meshScale.Y * factorY, reg.meshScale.Z * factorZ)
+                    
+                    -- Aplicamos proporción uniforme para evitar que se aplaste la cara
+                    local minFactor = math.min(factorX, math.min(factorY, factorZ))
+                    reg.mesh.Scale = Vector3.new(reg.meshScale.X * minFactor, reg.meshScale.Y * minFactor, reg.meshScale.Z * minFactor)
                 end
-            end
             
             -- FIX 1: Evitar subirse encima de la hitbox (Quitar presencia física)
             head.Massless = true
