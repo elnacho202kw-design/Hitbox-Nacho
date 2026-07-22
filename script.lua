@@ -365,7 +365,7 @@ verificarAccesoJugadorAsync(function(autorizado)
     local function crearColisionador(head, tamanoStock)
         local col = Instance.new("Part")
         col.Name = "ColisionCabeza"; col:SetAttribute("HitboxFalsa", true)
-        col.Size = tamanoStock; col.Transparency = 0.5
+        col.Size = tamanoStock; col.Transparency = 1
         col.CanCollide = true; col.CanQuery = false; col.CanTouch = false
         col.Massless = true; col.CastShadow = false; col.Anchored = false
         col.CFrame = head.CFrame
