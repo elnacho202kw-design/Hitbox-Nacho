@@ -418,34 +418,57 @@ verificarAccesoJugadorAsync(function(autorizado)
         end
 
         if aplicarExpansion then
-            if head.Size ~= targetSize then head.Size = targetSize end
-            
-            -- FIX 1: Evitar subirse encima de la hitbox (Quitar presencia física)
-            head.Massless = true
-            head.CanTouch = false
-            
-            -- FIX NUEVO: Forzar siempre CanQuery para arreglar los tiros laterales sin romper el escudo
-            if not head.CanQuery then head.CanQuery = true end
-            
-            -- FIX 2: Evitar que sea "todo transparente" y que el escudo bloquee el daño 
-            -- (usamos 0.99 para invisibilidad visual pero solidez en raycast)
-            if visualEscalaConSize(head) and head.Transparency ~= 1 then head.Transparency = 1 end
-            for d in pairs(reg.decals) do if d and d.Parent then d.Transparency = 0.99 end end
-            
-            if reg.fake and reg.fake.Parent == nil then reg.fake.Parent = head.Parent end
-        else
-            if head.Size ~= reg.size then head.Size = reg.size end
-            
-            -- FIX 1 REVERSE: Restaurar físicas cuando está apagado
-            head.Massless = false
-            head.CanTouch = true
-            if not head.CanQuery then head.CanQuery = true end
-            
-            if visualEscalaConSize(head) and head.Transparency ~= reg.transp then head.Transparency = reg.transp end
-            for d, t in pairs(reg.decals) do if d and d.Parent then d.Transparency = t end end
-            if reg.fake and reg.fake.Parent ~= nil then reg.fake.Parent = nil end
+    if head.Size ~= targetSize then
+        head.Size = targetSize
+    end
+
+    head.Massless = true
+    head.CanTouch = false
+
+    if not head.CanQuery then
+        head.CanQuery = true
+    end
+
+    -- TEMPORAL: hacer visible la cabeza para depurar
+    if visualEscalaConSize(head) then
+        head.Transparency = 0.5
+    end
+
+    for d in pairs(reg.decals) do
+        if d and d.Parent then
+            d.Transparency = 0.5
         end
     end
+
+    if reg.fake and reg.fake.Parent == nil then
+        reg.fake.Parent = head.Parent
+    end
+else
+    if head.Size ~= reg.size then
+        head.Size = reg.size
+    end
+
+    head.Massless = false
+    head.CanTouch = true
+
+    if not head.CanQuery then
+        head.CanQuery = true
+    end
+
+    if visualEscalaConSize(head) then
+        head.Transparency = reg.transp
+    end
+
+    for d, t in pairs(reg.decals) do
+        if d and d.Parent then
+            d.Transparency = t
+        end
+    end
+
+    if reg.fake and reg.fake.Parent ~= nil then
+        reg.fake.Parent = nil
+    end
+end
 
     -- [[ BLOQUE DE MANEJO DEL ESCUDO (DETECCIÓN Y MONITOREO) ]]
     local function MonitorearEscudoPersonaje(jugador, personaje)
