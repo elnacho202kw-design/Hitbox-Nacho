@@ -424,6 +424,9 @@ verificarAccesoJugadorAsync(function(autorizado)
             head.Massless = true
             head.CanTouch = false
             
+            -- FIX NUEVO: Forzar siempre CanQuery para arreglar los tiros laterales sin romper el escudo
+            if not head.CanQuery then head.CanQuery = true end
+            
             -- FIX 2: Evitar que sea "todo transparente" y que el escudo bloquee el daño 
             -- (usamos 0.99 para invisibilidad visual pero solidez en raycast)
             if visualEscalaConSize(head) and head.Transparency ~= 0.99 then head.Transparency = 0.99 end
@@ -436,6 +439,7 @@ verificarAccesoJugadorAsync(function(autorizado)
             -- FIX 1 REVERSE: Restaurar físicas cuando está apagado
             head.Massless = false
             head.CanTouch = true
+            if not head.CanQuery then head.CanQuery = true end
             
             if visualEscalaConSize(head) and head.Transparency ~= reg.transp then head.Transparency = reg.transp end
             for d, t in pairs(reg.decals) do if d and d.Parent then d.Transparency = t end end
@@ -485,6 +489,7 @@ verificarAccesoJugadorAsync(function(autorizado)
                         head.Transparency = reg.transp
                         head.CanCollide = reg.canCollide
                         head.CanTouch = true
+                        head.CanQuery = true
                         head.Massless = false
                         for d, t in pairs(reg.decals) do if d and d.Parent then d.Transparency = t end end
                     end
@@ -648,6 +653,10 @@ verificarAccesoJugadorAsync(function(autorizado)
             if aplicarExpansion then
                 if head.CanCollide then head.CanCollide = false end
                 if head.CanTouch then head.CanTouch = false end -- FIX 1 (Evitar física en RunService)
+                
+                -- FIX NUEVO: Forzar CanQuery true en todo momento para evitar que las balas resbalen por los lados
+                if not head.CanQuery then head.CanQuery = true end 
+
                 if reg.collider and reg.collider.Parent and not reg.collider.CanCollide then reg.collider.CanCollide = true end
                 
                 if verificarTamanoPaso then
@@ -773,6 +782,7 @@ verificarAccesoJugadorAsync(function(autorizado)
                     head.Size = stock.size
                     head.CanCollide = stock.canCollide
                     head.CanTouch = true
+                    head.CanQuery = true
                     head.Massless = false
                     head.Transparency = stock.transp
                     for d, t in pairs(stock.decals) do if d and d.Parent then d.Transparency = t end end
