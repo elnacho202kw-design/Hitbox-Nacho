@@ -424,7 +424,7 @@ verificarAccesoJugadorAsync(function(autorizado)
                 head.Size = targetSize 
                 
                 -- SISTEMA HÍBRIDO: Si es FileMesh, reducimos su escala visual para compensar el tamaño gigante
-                if reg.mesh then
+                if reg.mesh and reg.meshScale then
                     local factorX = reg.size.X / targetSize.X
                     local factorY = reg.size.Y / targetSize.Y
                     local factorZ = reg.size.Z / targetSize.Z
@@ -446,7 +446,7 @@ verificarAccesoJugadorAsync(function(autorizado)
                 head.Size = reg.size 
                 
                 -- SISTEMA HÍBRIDO: Restaurar la escala visual de la malla original
-                if reg.mesh then
+                if reg.mesh and reg.meshScale then
                     reg.mesh.Scale = reg.meshScale
                 end
             end
@@ -466,7 +466,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         for _, child in ipairs(personaje:GetChildren()) do
             if esObjetoEscudo(child) then tieneEscudo = true; break end
         end
-        
+    end    
         ActualizarEstadoJugador(jugador, tieneEscudo)
 
         local cAdded = personaje.ChildAdded:Connect(function(child)
@@ -806,9 +806,15 @@ if visualEscalaConSize(head) then
                     head.Massless = false
                     head.Transparency = stock.transp
                     for d, t in pairs(stock.decals) do if d and d.Parent then d.Transparency = t end end
+                    
+                    -- Restaurar escala del FileMesh si lo tenía
+                    if stock.mesh and stock.meshScale then
+                        stock.mesh.Scale = stock.meshScale
+                    end
                 end
                 if stock.collider then stock.collider:Destroy() end
                 if stock.fake then stock.fake:Destroy() end
+                if stock.transpLock then stock.transpLock:Disconnect() end -- Destruir el candado
             end
             
             for _, list in pairs(conexionesEscudo) do
