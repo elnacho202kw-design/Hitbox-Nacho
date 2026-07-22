@@ -419,11 +419,24 @@ verificarAccesoJugadorAsync(function(autorizado)
 
         if aplicarExpansion then
             if head.Size ~= targetSize then head.Size = targetSize end
-            if visualEscalaConSize(head) and head.Transparency ~= 1 then head.Transparency = 1 end
-            for d in pairs(reg.decals) do if d and d.Parent then d.Transparency = 1 end end
+            
+            -- FIX 1: Evitar subirse encima de la hitbox (Quitar presencia física)
+            head.Massless = true
+            head.CanTouch = false
+            
+            -- FIX 2: Evitar que sea "todo transparente" y que el escudo bloquee el daño 
+            -- (usamos 0.99 para invisibilidad visual pero solidez en raycast)
+            if visualEscalaConSize(head) and head.Transparency ~= 0.99 then head.Transparency = 0.99 end
+            for d in pairs(reg.decals) do if d and d.Parent then d.Transparency = 0.99 end end
+            
             if reg.fake and reg.fake.Parent == nil then reg.fake.Parent = head.Parent end
         else
             if head.Size ~= reg.size then head.Size = reg.size end
+            
+            -- FIX 1 REVERSE: Restaurar físicas cuando está apagado
+            head.Massless = false
+            head.CanTouch = true
+            
             if visualEscalaConSize(head) and head.Transparency ~= reg.transp then head.Transparency = reg.transp end
             for d, t in pairs(reg.decals) do if d and d.Parent then d.Transparency = t end end
             if reg.fake and reg.fake.Parent ~= nil then reg.fake.Parent = nil end
@@ -471,6 +484,8 @@ verificarAccesoJugadorAsync(function(autorizado)
                         head.Size = reg.size
                         head.Transparency = reg.transp
                         head.CanCollide = reg.canCollide
+                        head.CanTouch = true
+                        head.Massless = false
                         for d, t in pairs(reg.decals) do if d and d.Parent then d.Transparency = t end end
                     end
                     if reg.collider then reg.collider:Destroy() end
@@ -504,17 +519,23 @@ verificarAccesoJugadorAsync(function(autorizado)
 
         cabezasGuardadas[jugador] = head
 
+        -- FIX 3: Evitar que al cerrar y abrir el script (F3), se guarde el tamaño ya expandido como si fuera normal
+        local tamanoOriginal = head.Size
+        if tamanoOriginal.Magnitude > 3 then 
+            tamanoOriginal = Vector3.new(1.2, 1, 1.2) -- Tamaño estándar de cabeza
+        end
+
         local reg = {
-            size = head.Size, canCollide = head.CanCollide, transp = head.Transparency, decals = {},
+            size = tamanoOriginal, canCollide = head.CanCollide, transp = (head.Transparency == 0.99 and 0 or head.Transparency), decals = {},
             personaje = personaje, jugador = jugador, esEscudo = false
         }
         reg.collider = crearColisionador(head, reg.size)
 
         if visualEscalaConSize(head) then
-            for _, d in ipairs(head:GetDescendants()) do if d:IsA("Decal") or d:IsA("Texture") then reg.decals[d] = d.Transparency end end
+            for _, d in ipairs(head:GetDescendants()) do if d:IsA("Decal") or d:IsA("Texture") then reg.decals[d] = (d.Transparency == 0.99 and 0 or d.Transparency) end end
             reg.fake, reg.plantilla = crearYColocarVisual(head)
-            head.Transparency = 1
-            for d in pairs(reg.decals) do d.Transparency = 1 end
+            head.Transparency = 0.99
+            for d in pairs(reg.decals) do d.Transparency = 0.99 end
             reg.fake.Color = head.Color; reg.fake.Material = head.Material
             if reg.fake:IsA("MeshPart") and head:IsA("MeshPart") then reg.fake.TextureID = head.TextureID end
         end
@@ -626,6 +647,7 @@ verificarAccesoJugadorAsync(function(autorizado)
 
             if aplicarExpansion then
                 if head.CanCollide then head.CanCollide = false end
+                if head.CanTouch then head.CanTouch = false end -- FIX 1 (Evitar física en RunService)
                 if reg.collider and reg.collider.Parent and not reg.collider.CanCollide then reg.collider.CanCollide = true end
                 
                 if verificarTamanoPaso then
@@ -745,9 +767,14 @@ verificarAccesoJugadorAsync(function(autorizado)
             for _, con in ipairs(conexiones) do con:Disconnect() end
             for _, conCh in pairs(conexionesPersonajes) do conCh:Disconnect() end
             
+            -- FIX 3: Resetear todo por completo sin dejar la cabeza agrandada ni transparecias rotas
             for head, stock in pairs(registros) do
                 if head and head:IsDescendantOf(workspace) then
-                    head.Size = stock.size; head.CanCollide = stock.canCollide; head.Transparency = stock.transp
+                    head.Size = stock.size
+                    head.CanCollide = stock.canCollide
+                    head.CanTouch = true
+                    head.Massless = false
+                    head.Transparency = stock.transp
                     for d, t in pairs(stock.decals) do if d and d.Parent then d.Transparency = t end end
                 end
                 if stock.collider then stock.collider:Destroy() end
