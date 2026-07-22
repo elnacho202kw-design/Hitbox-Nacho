@@ -355,9 +355,9 @@ end
 
 ActualizarEstadoJugador = function(jugador, tieneEscudoNuevo)
     local head = cabezasGuardadas[jugador]
-    if not head or not head.Parent then return end
+    if not head then return end
     local reg = registros[head]
-    if not reg then return end
+    if not reg or not head.Parent then return end
 
     if tieneEscudoNuevo ~= nil then reg.esEscudo = tieneEscudoNuevo end
 
@@ -431,26 +431,12 @@ local function procesarCargaPersonaje(jugador, personaje)
     if not SCRIPT_ACTIVO then return end
     if not INCLUIRME and jugador == LocalPlayer then return end
 
-    -- Limpieza previa si el jugador ya tenía un registro anterior activo
-    local cabezaAntigua = cabezasGuardadas[jugador]
-    if cabezaAntigua and registros[cabezaAntigua] then
-        local regAntiguo = registros[cabezaAntigua]
-        if regAntiguo.collider then regAntiguo.collider:Destroy() end
-        if regAntiguo.fake then regAntiguo.fake:Destroy() end
-        registros[cabezaAntigua] = nil
-    end
-
     local head = buscarCabeza(personaje)
     if not head or not personaje:IsDescendantOf(workspace) then return end
+    if registros[head] then return end 
 
     local t = 0
     while not jugador:HasAppearanceLoaded() and t < 3 do task.wait(0.1); t = t + 0.1 end
-
-    -- Asegurar que la cabeza sigue siendo válida tras el yield
-    if not head or not head.Parent then
-        head = buscarCabeza(personaje)
-        if not head then return end
-    end
 
     cabezasGuardadas[jugador] = head
 
@@ -475,15 +461,13 @@ local function procesarCargaPersonaje(jugador, personaje)
     registros[head] = reg
 
     MonitorearEscudoPersonaje(jugador, personaje)
+    
     ActualizarEstadoJugador(jugador, nil)
 end
 
 local function gestionarConexionJugador(jugador)
     conexionesPersonajes[jugador] = jugador.CharacterAdded:Connect(function(personaje)
-        task.spawn(function()
-            task.wait(0.2) -- Breve respiro para que el personaje termine de spawnear en workspace de forma limpia
-            procesarCargaPersonaje(jugador, personaje)
-        end)
+        procesarCargaPersonaje(jugador, personaje)
     end)
     
     jugador.CharacterRemoving:Connect(function(personaje)
@@ -534,14 +518,26 @@ end)
 conexiones[#conexiones + 1] = RunService.Stepped:Connect(function()
     if not SCRIPT_ACTIVO then return end
     for head, reg in pairs(registros) do
-        if head and head.Parent then
-            local activadoEnJugador = (EXPANSION_ACTIVA and estadoJugadores[reg.jugador] ~= false)
-            if activadoEnJugador then
-                if head.CanCollide then head.CanCollide = false end
-                if reg.collider and reg.collider.Parent and not reg.collider.CanCollide then reg.collider.CanCollide = true end
-            else
-                if not head.CanCollide and reg.canCollide then head.CanCollide = true end
-                if reg.collider and reg.collider.Parent and reg.collider.CanCollide then reg.collider.CanCollide = false end
+        -- FIX 2: Evitamos errores si la cabeza deja de existir abruptamente
+        if not head or not head.Parent then continue end
+
+        local activadoEnJugador = (EXPANSION_ACTIVA and estadoJugadores[reg.jugador] ~= false)
+        if activadoEnJugador then
+            if head.CanCollide then head.CanCollide = false end
+            if reg.collider and reg.collider.Parent and not reg.collider.CanCollide then reg.collider.CanCollide = true end
+            
+            -- FIX 2: Reforzamos el tamaño (Evita que el juego achique la hitbox de repente)
+            local targetSize = reg.esEscudo and TAMANO_ESCUDO or TAMANO
+            if (head.Size - targetSize).Magnitude > 0.05 then
+                ActualizarEstadoJugador(reg.jugador, nil)
+            end
+        else
+            if not head.CanCollide and reg.canCollide then head.CanCollide = true end
+            if reg.collider and reg.collider.Parent and reg.collider.CanCollide then reg.collider.CanCollide = false end
+            
+            -- FIX 2: Reforzamos el tamaño original cuando está apagado
+            if (head.Size - reg.size).Magnitude > 0.05 then
+                ActualizarEstadoJugador(reg.jugador, nil)
             end
         end
     end
@@ -549,6 +545,15 @@ end)
 
 task.spawn(function()
     while SCRIPT_ACTIVO do
+        -- FIX 1: Limpiamos la caché de jugadores que Roblox eliminó del mapa por la distancia (StreamingEnabled)
+        for head, reg in pairs(registros) do
+            if not head or not head.Parent or not head:IsDescendantOf(workspace) then
+                if reg.collider then pcall(function() reg.collider:Destroy() end) end
+                if reg.fake then pcall(function() reg.fake:Destroy() end) end
+                registros[head] = nil
+            end
+        end
+
         for _, jug in ipairs(Players:GetPlayers()) do
             if INCLUIRME or jug ~= LocalPlayer then
                 local char = jug.Character
@@ -587,7 +592,7 @@ conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input
         for _, conCh in pairs(conexionesPersonajes) do conCh:Disconnect() end
         
         for head, stock in pairs(registros) do
-            if head and head:IsDescendantOf(workspace) then
+            if head:IsDescendantOf(workspace) then
                 head.Size = stock.size; head.CanCollide = stock.canCollide; head.Transparency = stock.transp
                 for d, t in pairs(stock.decals) do if d.Parent then d.Transparency = t end end
             end
