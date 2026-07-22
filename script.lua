@@ -429,7 +429,7 @@ verificarAccesoJugadorAsync(function(autorizado)
             
             -- FIX 2: Evitar que sea "todo transparente" y que el escudo bloquee el daño 
             -- (usamos 0.99 para invisibilidad visual pero solidez en raycast)
-            if visualEscalaConSize(head) and head.Transparency ~= 0.99 then head.Transparency = 0.99 end
+            if visualEscalaConSize(head) and head.Transparency ~= 1 then head.Transparency = 1 end
             for d in pairs(reg.decals) do if d and d.Parent then d.Transparency = 0.99 end end
             
             if reg.fake and reg.fake.Parent == nil then reg.fake.Parent = head.Parent end
