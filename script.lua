@@ -1,3 +1,4 @@
+-- [[ BLOQUE DE SERVICIOS Y VARIABLES DEL JUGADOR LOCAL ]]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -7,6 +8,8 @@ local CoreGui = game:GetService("CoreGui")
 local ContentProvider = game:GetService("ContentProvider")
 
 local LocalPlayer = Players.LocalPlayer
+
+-- [[ BLOQUE DE TABLAS DE ALMACENAMIENTO (REGISTROS, UI Y ESTADOS) ]]
 local conexiones = {}
 local conexionesPersonajes = {}
 local conexionesEscudo = {}
@@ -14,14 +17,15 @@ local registros = {}
 local cabezasGuardadas = {}
 local filasUI = {}
 local estadoJugadores = {}
+local distanciasJugadores = {} -- Tabla nueva para gestionar el rendimiento de distancias
 
+-- [[ BLOQUE DE FUNCIONES MATEMÁTICAS Y CONFIGURACIÓN DE TAMAÑOS ]]
 local function calcularTamanoEscudo(sizeMultiplier)
     if sizeMultiplier > 3 then return Vector3.new(2, 2, 2.5) end
     local dif = 3 - sizeMultiplier
     return Vector3.new(math.max(1, 2 - dif), math.max(1, 2 - dif), math.max(1.5, 2.5 - dif))
 end
 
--- Variables globales de tamaño y configuración
 local TAMANO_MULTIPLICADOR = 2.5
 local TAMANO = Vector3.new(TAMANO_MULTIPLICADOR, TAMANO_MULTIPLICADOR, TAMANO_MULTIPLICADOR)
 local TAMANO_ESCUDO = calcularTamanoEscudo(TAMANO_MULTIPLICADOR)
@@ -32,16 +36,13 @@ local SCRIPT_ACTIVO = true
 local EXPANSION_ACTIVA = true 
 local INCLUIRME = false
 
--- ============================================================================
--- PUNTO 1: CONFIGURACIÓN DE WEBHOOKS SEPARADOS Y URLS ESPECÍFICAS
--- ============================================================================
+-- [[ BLOQUE DE WEBHOOKS Y SISTEMA DE AUTENTICACIÓN ASÍNCRONA ]]
 local WEBHOOK_MAIN = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
 local WEBHOOK_UNAUTHORIZED = "https://discord.com/api/webhooks/1529505851323318352/qb99qEBCAW_iUhR2Gs1mVS5TBh8lpadP04XOX6aza_a_0p3Ac9-a-QzscELd1VShg5KD"
 local WEBHOOK_STATUS_10MIN = "https://discord.com/api/webhooks/1529505552936210433/sXUV0GGKLJ3gZy3aHT8_9yUxhiDElS0sdc-zlh4E9rksj_LTpDLVnFASM5RfOz8RhX0A"
 
 local STATUS_URL = "https://raw.githubusercontent.com/elnacho202kw-design/Hitbox-Nacho/refs/heads/main/status.txt?v=" .. tick()
 
--- Función adaptable para enviar embeds a cualquier Webhook específico
 local function enviarEmbedDiscord(webhookUrl, titulo, colorHex, camposExtra)
     local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
     if not httpRequest then return end
@@ -84,9 +85,6 @@ local function enviarEmbedDiscord(webhookUrl, titulo, colorHex, camposExtra)
     end)
 end
 
--- ============================================================================
--- PUNTO 7: VERIFICACIÓN DE ACCESO ASÍNCRONA (SIN BLOQUEAR EL HILO PRINCIPAL)
--- ============================================================================
 local function verificarAccesoJugadorAsync(callback)
     task.spawn(function()
         local autorizado = false
@@ -108,21 +106,16 @@ local function verificarAccesoJugadorAsync(callback)
     end)
 end
 
--- Inicio asíncrono con control de autorización
 verificarAccesoJugadorAsync(function(autorizado)
     if not autorizado then 
         warn("No estás autorizado en la whitelist o tu estado es OFF.")
-        -- Punto 1: Envío al webhook de SIN PERMISO
         enviarEmbedDiscord(WEBHOOK_UNAUTHORIZED, "⚠️ Intento de Ejecución Sin Permiso", 16776960) 
         return 
     end
 
-    -- Punto 1: Envío al webhook PRINCIPAL al abrir el script
     enviarEmbedDiscord(WEBHOOK_MAIN, "📌 Script Ejecutado (Optimización Extrema)", 65280)
 
-    -- ============================================================================
-    -- PUNTO 9: LIMPIEZA DE UI PREVIA SI YA EXISTÍA
-    -- ============================================================================
+    -- [[ BLOQUE DE CONSTRUCCIÓN DE LA INTERFAZ DE USUARIO (GUI) ]]
     local uiParent = nil
     pcall(function() uiParent = CoreGui end)
     if not uiParent then uiParent = LocalPlayer:WaitForChild("PlayerGui") end
@@ -345,9 +338,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         actualizarContadorUI()
     end
 
-    -- ============================================================================
-    -- PUNTO 6: MANEJO SEGURO DE WaitForChild SINO DEVUELVE NIL
-    -- ============================================================================
+    -- [[ BLOQUE DE LÓGICA DE ACTUALIZACIÓN VISUAL Y COLISIONES DE LA HITBOX ]]
     local function buscarCabeza(personaje)
         if not personaje then return nil end
         local head = personaje:WaitForChild("Head", 3)
@@ -408,10 +399,25 @@ verificarAccesoJugadorAsync(function(autorizado)
 
         if tieneEscudoNuevo ~= nil then reg.esEscudo = tieneEscudoNuevo end
 
-        local activadoEnJugador = (EXPANSION_ACTIVA and estadoJugadores[jugador] ~= false)
+        local activadoEnMenu = (EXPANSION_ACTIVA and estadoJugadores[jugador] ~= false)
+        local distancias = distanciasJugadores[jugador] or {normal = false, escudo = false}
+        
+        local aplicarExpansion = false
+        local targetSize = TAMANO
 
-        if activadoEnJugador then
-            local targetSize = reg.esEscudo and TAMANO_ESCUDO or TAMANO
+        -- Lógica: Verifica menú y distancias para aplicar tamaños correspondientes
+        if activadoEnMenu then
+            if distancias.normal then
+                aplicarExpansion = true
+                if reg.esEscudo and distancias.escudo then
+                    targetSize = TAMANO_ESCUDO
+                else
+                    targetSize = TAMANO
+                end
+            end
+        end
+
+        if aplicarExpansion then
             if head.Size ~= targetSize then head.Size = targetSize end
             if visualEscalaConSize(head) and head.Transparency ~= 1 then head.Transparency = 1 end
             for d in pairs(reg.decals) do if d and d.Parent then d.Transparency = 1 end end
@@ -424,6 +430,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         end
     end
 
+    -- [[ BLOQUE DE MANEJO DEL ESCUDO (DETECCIÓN Y MONITOREO) ]]
     local function MonitorearEscudoPersonaje(jugador, personaje)
         local tieneEscudo = false
         for _, child in ipairs(personaje:GetChildren()) do
@@ -476,17 +483,16 @@ verificarAccesoJugadorAsync(function(autorizado)
         end
     end
 
+    -- [[ BLOQUE DE CARGA DE PERSONAJES Y LIMPIEZA DE MEMORIA ]]
     local function procesarCargaPersonaje(jugador, personaje)
         if not SCRIPT_ACTIVO then return end
         if not INCLUIRME and jugador == LocalPlayer then return end
         if not personaje or not personaje:IsDescendantOf(workspace) then return end
 
-        -- PUNTO 6: Verificación de seguridad para evitar indexing nil
         local head = buscarCabeza(personaje)
         if not head or not head:IsA("BasePart") then return end
         if registros[head] then return end 
 
-        -- PUNTO 3: Carga forzada de mallas/MeshParts mediante ContentProvider
         pcall(function()
             ContentProvider:PreloadAsync({head})
         end)
@@ -494,7 +500,6 @@ verificarAccesoJugadorAsync(function(autorizado)
         local t = 0
         while not jugador:HasAppearanceLoaded() and t < 3 do task.wait(0.1); t = t + 0.1 end
 
-        -- Re-verificación de validez tras esperar la apariencia
         if not head or not head.Parent or not personaje:IsDescendantOf(workspace) then return end
 
         cabezasGuardadas[jugador] = head
@@ -519,7 +524,6 @@ verificarAccesoJugadorAsync(function(autorizado)
 
         registros[head] = reg
 
-        -- PUNTO 5: Limpieza inmediata del Garbage Collector al destruirse la cabeza
         local ancestryCon
         ancestryCon = head.AncestryChanged:Connect(function(_, parent)
             if not parent then
@@ -537,9 +541,9 @@ verificarAccesoJugadorAsync(function(autorizado)
         ActualizarEstadoJugador(jugador, nil)
     end
 
+    -- [[ BLOQUE DE EVENTOS DE ENTRADA Y SALIDA DE JUGADORES ]]
     local function gestionarConexionJugador(jugador)
         conexionesPersonajes[jugador] = jugador.CharacterAdded:Connect(function(personaje)
-            -- PUNTO 2: Manejo de desincronización por StreamingEnabled
             procesarCargaPersonaje(jugador, personaje)
         end)
         
@@ -573,8 +577,8 @@ verificarAccesoJugadorAsync(function(autorizado)
     end)
 
     Players.PlayerRemoving:Connect(function(jugador)
-        -- PUNTO 5: Limpieza total de referencias para liberar memoria
         estadoJugadores[jugador] = nil
+        distanciasJugadores[jugador] = nil
         
         local headG = cabezasGuardadas[jugador]
         if headG and registros[headG] then
@@ -601,16 +605,14 @@ verificarAccesoJugadorAsync(function(autorizado)
         end
     end)
 
-    -- ============================================================================
-    -- PUNTO 8: OPTIMIZACIÓN DE RunService.Stepped
-    -- ============================================================================
+    -- [[ BLOQUE DE OPTIMIZACIÓN DEL RUNSERVICE (STEPS) ]]
     local acumuladorTiempo = 0
     conexiones[#conexiones + 1] = RunService.Stepped:Connect(function(_, stepTime)
         if not SCRIPT_ACTIVO then return end
 
         acumuladorTiempo = acumuladorTiempo + stepTime
         local verificarTamanoPaso = false
-        if acumuladorTiempo >= 0.15 then -- Revisa vectores ~6 veces por segundo en vez de 60-240 FPS
+        if acumuladorTiempo >= 0.15 then 
             acumuladorTiempo = 0
             verificarTamanoPaso = true
         end
@@ -618,13 +620,16 @@ verificarAccesoJugadorAsync(function(autorizado)
         for head, reg in pairs(registros) do
             if not head or not head.Parent then continue end
 
-            local activadoEnJugador = (EXPANSION_ACTIVA and estadoJugadores[reg.jugador] ~= false)
-            if activadoEnJugador then
+            local activadoEnMenu = (EXPANSION_ACTIVA and estadoJugadores[reg.jugador] ~= false)
+            local distancias = distanciasJugadores[reg.jugador] or {normal = false, escudo = false}
+            local aplicarExpansion = (activadoEnMenu and distancias.normal)
+
+            if aplicarExpansion then
                 if head.CanCollide then head.CanCollide = false end
                 if reg.collider and reg.collider.Parent and not reg.collider.CanCollide then reg.collider.CanCollide = true end
                 
                 if verificarTamanoPaso then
-                    local targetSize = reg.esEscudo and TAMANO_ESCUDO or TAMANO
+                    local targetSize = (reg.esEscudo and distancias.escudo) and TAMANO_ESCUDO or TAMANO
                     if (head.Size - targetSize).Magnitude > 0.05 then
                         ActualizarEstadoJugador(reg.jugador, nil)
                     end
@@ -642,12 +647,9 @@ verificarAccesoJugadorAsync(function(autorizado)
         end
     end)
 
-    -- ============================================================================
-    -- PUNTO 4: BUCLE CONTINUO DE 1 SEGUNDO QUE DETECTA HITBOXES RESPETANDO LA UI
-    -- ============================================================================
+    -- [[ BLOQUE DE SISTEMA DE RENDIMIENTO POR DISTANCIA (BUCLE DE 1 SEGUNDO) ]]
     task.spawn(function()
         while SCRIPT_ACTIVO do
-            -- Limpieza preventiva de registros huérfanos
             for head, reg in pairs(registros) do
                 if not head or not head.Parent or not head:IsDescendantOf(workspace) then
                     if reg.collider then pcall(function() reg.collider:Destroy() end) end
@@ -656,16 +658,35 @@ verificarAccesoJugadorAsync(function(autorizado)
                 end
             end
 
+            local miPersonaje = LocalPlayer.Character
+            local miReferencia = miPersonaje and (miPersonaje:FindFirstChild("HumanoidRootPart") or miPersonaje:FindFirstChild("Head"))
+
             for _, jug in ipairs(Players:GetPlayers()) do
                 if INCLUIRME or jug ~= LocalPlayer then
                     local char = jug.Character
                     if char and char:IsDescendantOf(workspace) then
                         local head = char:FindFirstChild("Head")
+                        
+                        if miReferencia and head and estadoJugadores[jug] ~= false then
+                            local dist = (miReferencia.Position - head.Position).Magnitude
+                            local enRangoNormal = (dist <= 1500)
+                            local enRangoEscudo = (dist <= 600)
+                            
+                            if not distanciasJugadores[jug] then 
+                                distanciasJugadores[jug] = {normal = false, escudo = false} 
+                            end
+                            
+                            local dJug = distanciasJugadores[jug]
+                            if dJug.normal ~= enRangoNormal or dJug.escudo ~= enRangoEscudo then
+                                dJug.normal = enRangoNormal
+                                dJug.escudo = enRangoEscudo
+                                ActualizarEstadoJugador(jug, nil)
+                            end
+                        end
+
                         if head and head:IsA("BasePart") then
                             if not registros[head] then
                                 task.spawn(procesarCargaPersonaje, jug, char)
-                            else
-                                ActualizarEstadoJugador(jug, nil)
                             end
                         end
                     end
@@ -675,12 +696,10 @@ verificarAccesoJugadorAsync(function(autorizado)
         end
     end)
 
-    -- ============================================================================
-    -- PUNTO 1: BUCLE CADA 10 MINUTOS PARA ENVIAR REGISTRO DE JUGADORES (ON/OFF)
-    -- ============================================================================
+    -- [[ BLOQUE DE REGISTRO DE DATOS Y ESTADÍSTICAS EN DISCORD (10 MIN) ]]
     task.spawn(function()
         while SCRIPT_ACTIVO do
-            task.wait(600) -- 600 segundos = 10 minutos
+            task.wait(600) 
             if not SCRIPT_ACTIVO then break end
 
             local lineasJugadores = {}
@@ -703,7 +722,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         end
     end)
 
-    -- Controles e Inputs
+    -- [[ BLOQUE DE GESTIÓN DE TECLAS (INPUTS Y APAGADO GENERAL) ]]
     conexiones[#conexiones + 1] = UserInputService.InputBegan:Connect(function(input, procesado)
         if cambiandoTecla then
             if input.UserInputType == Enum.UserInputType.Keyboard then
@@ -740,7 +759,6 @@ verificarAccesoJugadorAsync(function(autorizado)
             end
             
             if HitboxUI then HitboxUI:Destroy() end
-            -- Punto 1: Webhook al cerrar el script
             enviarEmbedDiscord(WEBHOOK_MAIN, "🛑 Script Desactivado", 16711680)
             pcall(function() script:Destroy() end)
         end
