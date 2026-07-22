@@ -17,12 +17,10 @@ local registros = {}
 local cabezasGuardadas = {}
 local filasUI = {}
 local estadoJugadores = {}
-local distanciasJugadores = {} -- Tabla nueva para gestionar el rendimiento de distancias
+local distanciasJugadores = {} 
 
 -- [[ BLOQUE DE FUNCIONES MATEMÁTICAS Y CONFIGURACIÓN DE TAMAÑOS ]]
 local function calcularTamanoEscudo(sizeMultiplier)
-    -- CORRECCIÓN: Se invierten los valores de X y Z para que la hitbox lateral sea más ancha 
-    -- y atrape las balas, mientras que el frontal se mantiene detrás del escudo.
     if sizeMultiplier > 3 then return Vector3.new(2.5, 2, 3) end
     local dif = 3 - sizeMultiplier
     return Vector3.new(math.max(1.5, 2.5 - dif), math.max(1, 2 - dif), math.max(1, 3 - dif))
@@ -393,6 +391,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         return fake, plantilla
     end
 
+    -- CORRECCIÓN APLICADA AQUÍ: Faltaba el 'end' de esta función en tu versión, lo que rompía todo.
     ActualizarEstadoJugador = function(jugador, tieneEscudoNuevo)
         local head = cabezasGuardadas[jugador]
         if not head then return end
@@ -407,7 +406,6 @@ verificarAccesoJugadorAsync(function(autorizado)
         local aplicarExpansion = false
         local targetSize = TAMANO
 
-        -- Lógica: Verifica menú y distancias para aplicar tamaños correspondientes
         if activadoEnMenu then
             if distancias.normal then
                 aplicarExpansion = true
@@ -423,23 +421,18 @@ verificarAccesoJugadorAsync(function(autorizado)
             if head.Size ~= targetSize then 
                 head.Size = targetSize 
                 
-                -- SISTEMA HÍBRIDO: Si es FileMesh, reducimos su escala visual para compensar el tamaño gigante
-                -- SISTEMA HÍBRIDO MEJORADO: Corrige la deformación de mallas con textura
+                -- SISTEMA HÍBRIDO: Reducir escala visual si es FileMesh para que no se vea gigante
                 if reg.mesh and reg.meshScale then
                     local factorX = reg.size.X / targetSize.X
                     local factorY = reg.size.Y / targetSize.Y
                     local factorZ = reg.size.Z / targetSize.Z
-                    
-                    -- Aplicamos proporción uniforme para evitar que se aplaste la cara
-                    local minFactor = math.min(factorX, math.min(factorY, factorZ))
-                    reg.mesh.Scale = Vector3.new(reg.meshScale.X * minFactor, reg.meshScale.Y * minFactor, reg.meshScale.Z * minFactor)
+                    reg.mesh.Scale = Vector3.new(reg.meshScale.X * factorX, reg.meshScale.Y * factorY, reg.meshScale.Z * factorZ)
                 end
+            end
             
-            -- FIX 1: Evitar subirse encima de la hitbox (Quitar presencia física)
             head.Massless = true
             head.CanTouch = false
             
-            -- FIX 2: Invisibilidad solo para los que no usan FileMesh
             if visualEscalaConSize(head) and head.Transparency ~= 0.99 then head.Transparency = 0.99 end
             for d in pairs(reg.decals) do if d and d.Parent then d.Transparency = 0.99 end end
             
@@ -448,13 +441,12 @@ verificarAccesoJugadorAsync(function(autorizado)
             if head.Size ~= reg.size then 
                 head.Size = reg.size 
                 
-                -- SISTEMA HÍBRIDO: Restaurar la escala visual de la malla original
+                -- SISTEMA HÍBRIDO: Restaurar escala visual original
                 if reg.mesh and reg.meshScale then
                     reg.mesh.Scale = reg.meshScale
                 end
             end
             
-            -- FIX 1 REVERSE: Restaurar físicas cuando está apagado
             head.Massless = false
             head.CanTouch = true
             
@@ -462,6 +454,7 @@ verificarAccesoJugadorAsync(function(autorizado)
             for d, t in pairs(reg.decals) do if d and d.Parent then d.Transparency = t end end
             if reg.fake and reg.fake.Parent ~= nil then reg.fake.Parent = nil end
         end
+    end -- ESTE END ESTABA FALTANDO/MAL PUESTO
 
     -- [[ BLOQUE DE MANEJO DEL ESCUDO (DETECCIÓN Y MONITOREO) ]]
     local function MonitorearEscudoPersonaje(jugador, personaje)
@@ -469,7 +462,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         for _, child in ipairs(personaje:GetChildren()) do
             if esObjetoEscudo(child) then tieneEscudo = true; break end
         end
-    end    
+        
         ActualizarEstadoJugador(jugador, tieneEscudo)
 
         local cAdded = personaje.ChildAdded:Connect(function(child)
@@ -507,6 +500,11 @@ verificarAccesoJugadorAsync(function(autorizado)
                         head.CanTouch = true
                         head.Massless = false
                         for d, t in pairs(reg.decals) do if d and d.Parent then d.Transparency = t end end
+                        
+                        -- FIX CÁMARA DE MUERTE: Restaurar la escala del Mesh para que la cabeza se vea normal al morir
+                        if reg.mesh and reg.meshScale then
+                            reg.mesh.Scale = reg.meshScale
+                        end
                     end
                     if reg.collider then reg.collider:Destroy() end
                     if reg.fake then reg.fake:Destroy() end
@@ -539,10 +537,9 @@ verificarAccesoJugadorAsync(function(autorizado)
 
         cabezasGuardadas[jugador] = head
 
-        -- FIX 3: Evitar que al cerrar y abrir el script (F3), se guarde el tamaño ya expandido como si fuera normal
         local tamanoOriginal = head.Size
         if tamanoOriginal.Magnitude > 3 then 
-            tamanoOriginal = Vector3.new(1.2, 1, 1.2) -- Tamaño estándar de cabeza
+            tamanoOriginal = Vector3.new(1.2, 1, 1.2)
         end
 
         local usaFileMesh = not visualEscalaConSize(head)
@@ -556,7 +553,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         }
         reg.collider = crearColisionador(head, reg.size)
 
-if visualEscalaConSize(head) then
+        if visualEscalaConSize(head) then
             for _, d in ipairs(head:GetDescendants()) do if d:IsA("Decal") or d:IsA("Texture") then reg.decals[d] = (d.Transparency == 0.99 and 0 or d.Transparency) end end
             reg.fake, reg.plantilla = crearYColocarVisual(head)
             head.Transparency = 0.99
@@ -570,7 +567,6 @@ if visualEscalaConSize(head) then
 
         registros[head] = reg
 
-        -- FIX: Candado de transparencia (solo para el 99% que usa clones visuales)
         reg.transpLock = head:GetPropertyChangedSignal("Transparency"):Connect(function()
            if visualEscalaConSize(head) and head.Size.Magnitude > 3 and head.Transparency < 0.99 then
                 head.Transparency = 0.99
@@ -584,7 +580,7 @@ if visualEscalaConSize(head) then
                     local r = registros[head]
                     if r.collider then pcall(function() r.collider:Destroy() end) end
                     if r.fake then pcall(function() r.fake:Destroy() end) end
-                    if r.transpLock then pcall(function() r.transpLock:Disconnect() end) end -- LA LÍNEA VA AQUÍ ADENTRO
+                    if r.transpLock then pcall(function() r.transpLock:Disconnect() end) end
                     registros[head] = nil
                 end
                 if ancestryCon then ancestryCon:Disconnect() end
@@ -592,7 +588,6 @@ if visualEscalaConSize(head) then
         end)
 
         MonitorearEscudoPersonaje(jugador, personaje)
-        ActualizarEstadoJugador(jugador, nil)
     end
 
     -- [[ BLOQUE DE EVENTOS DE ENTRADA Y SALIDA DE JUGADORES ]]
@@ -680,7 +675,7 @@ if visualEscalaConSize(head) then
 
             if aplicarExpansion then
                 if head.CanCollide then head.CanCollide = false end
-                if head.CanTouch then head.CanTouch = false end -- FIX 1 (Evitar física en RunService)
+                if head.CanTouch then head.CanTouch = false end
                 if reg.collider and reg.collider.Parent and not reg.collider.CanCollide then reg.collider.CanCollide = true end
                 
                 if verificarTamanoPaso then
@@ -702,7 +697,7 @@ if visualEscalaConSize(head) then
         end
     end)
 
-    -- [[ BLOQUE DE SISTEMA DE RENDIMIENTO POR DISTANCIA (BUCLE DE 1 SEGUNDO) ]]
+    -- [[ BLOQUE DE SISTEMA DE RENDIMIENTO POR DISTANCIA ]]
     task.spawn(function()
         while SCRIPT_ACTIVO do
             for head, reg in pairs(registros) do
@@ -800,7 +795,6 @@ if visualEscalaConSize(head) then
             for _, con in ipairs(conexiones) do con:Disconnect() end
             for _, conCh in pairs(conexionesPersonajes) do conCh:Disconnect() end
             
-            -- FIX 3: Resetear todo por completo sin dejar la cabeza agrandada ni transparecias rotas
             for head, stock in pairs(registros) do
                 if head and head:IsDescendantOf(workspace) then
                     head.Size = stock.size
@@ -810,14 +804,13 @@ if visualEscalaConSize(head) then
                     head.Transparency = stock.transp
                     for d, t in pairs(stock.decals) do if d and d.Parent then d.Transparency = t end end
                     
-                    -- Restaurar escala del FileMesh si lo tenía
                     if stock.mesh and stock.meshScale then
                         stock.mesh.Scale = stock.meshScale
                     end
                 end
                 if stock.collider then stock.collider:Destroy() end
                 if stock.fake then stock.fake:Destroy() end
-                if stock.transpLock then stock.transpLock:Disconnect() end -- Destruir el candado
+                if stock.transpLock then pcall(function() stock.transpLock:Disconnect() end) end 
             end
             
             for _, list in pairs(conexionesEscudo) do
