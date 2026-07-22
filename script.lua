@@ -18,6 +18,7 @@ local cabezasGuardadas = {}
 local filasUI = {}
 local estadoJugadores = {}
 local distanciasJugadores = {} 
+local estoyVivo = true -- Nueva variable para controlar la killcam
 
 -- [[ BLOQUE DE FUNCIONES MATEMÁTICAS Y CONFIGURACIÓN DE TAMAÑOS ]]
 local function calcularTamanoEscudo(sizeMultiplier)
@@ -113,7 +114,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         return 
     end
 
-    enviarEmbedDiscord(WEBHOOK_MAIN, "📌 Script Ejecutado (Optimización Extrema)", 65280)
+    enviarEmbedDiscord(WEBHOOK_MAIN, "📌 Script Ejecutado (Fix Killcam)", 65280)
 
     -- [[ BLOQUE DE CONSTRUCCIÓN DE LA INTERFAZ DE USUARIO (GUI) ]]
     local uiParent = nil
@@ -121,9 +122,7 @@ verificarAccesoJugadorAsync(function(autorizado)
     if not uiParent then uiParent = LocalPlayer:WaitForChild("PlayerGui") end
 
     local uiAnterior = uiParent:FindFirstChild("HitboxUI_Optimizada")
-    if uiAnterior then
-        uiAnterior:Destroy()
-    end
+    if uiAnterior then uiAnterior:Destroy() end
 
     local HitboxUI = Instance.new("ScreenGui")
     HitboxUI.Name = "HitboxUI_Optimizada"
@@ -260,20 +259,14 @@ verificarAccesoJugadorAsync(function(autorizado)
 
     local arrastrandoSlider = false
     SliderKnob.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            arrastrandoSlider = true
-        end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then arrastrandoSlider = true end
     end)
     SliderBG.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            arrastrandoSlider = true
-        end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then arrastrandoSlider = true end
     end)
 
     UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            arrastrandoSlider = false
-        end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then arrastrandoSlider = false end
     end)
 
     UserInputService.InputChanged:Connect(function(input)
@@ -342,9 +335,7 @@ verificarAccesoJugadorAsync(function(autorizado)
     local function buscarCabeza(personaje)
         if not personaje then return nil end
         local head = personaje:WaitForChild("Head", 3)
-        if head and head:IsA("BasePart") then
-            return head
-        end
+        if head and head:IsA("BasePart") then return head end
         return nil
     end
 
@@ -391,7 +382,6 @@ verificarAccesoJugadorAsync(function(autorizado)
         return fake, plantilla
     end
 
-    -- CORRECCIÓN APLICADA AQUÍ: Faltaba el 'end' de esta función en tu versión, lo que rompía todo.
     ActualizarEstadoJugador = function(jugador, tieneEscudoNuevo)
         local head = cabezasGuardadas[jugador]
         if not head then return end
@@ -400,7 +390,8 @@ verificarAccesoJugadorAsync(function(autorizado)
 
         if tieneEscudoNuevo ~= nil then reg.esEscudo = tieneEscudoNuevo end
 
-        local activadoEnMenu = (EXPANSION_ACTIVA and estadoJugadores[jugador] ~= false)
+        -- AQUÍ EL FIX: Si tú estás muerto (estoyVivo es falso), activadoEnMenu cuenta como falso.
+        local activadoEnMenu = (EXPANSION_ACTIVA and estadoJugadores[jugador] ~= false and estoyVivo)
         local distancias = distanciasJugadores[jugador] or {normal = false, escudo = false}
         
         local aplicarExpansion = false
@@ -409,19 +400,13 @@ verificarAccesoJugadorAsync(function(autorizado)
         if activadoEnMenu then
             if distancias.normal then
                 aplicarExpansion = true
-                if reg.esEscudo and distancias.escudo then
-                    targetSize = TAMANO_ESCUDO
-                else
-                    targetSize = TAMANO
-                end
+                if reg.esEscudo and distancias.escudo then targetSize = TAMANO_ESCUDO else targetSize = TAMANO end
             end
         end
 
         if aplicarExpansion then
             if head.Size ~= targetSize then 
                 head.Size = targetSize 
-                
-                -- SISTEMA HÍBRIDO: Reducir escala visual si es FileMesh para que no se vea gigante
                 if reg.mesh and reg.meshScale then
                     local factorX = reg.size.X / targetSize.X
                     local factorY = reg.size.Y / targetSize.Y
@@ -430,31 +415,47 @@ verificarAccesoJugadorAsync(function(autorizado)
                 end
             end
             
-            head.Massless = true
-            head.CanTouch = false
+            head.Massless = true; head.CanTouch = false
             
             if visualEscalaConSize(head) and head.Transparency ~= 0.99 then head.Transparency = 0.99 end
             for d in pairs(reg.decals) do if d and d.Parent then d.Transparency = 0.99 end end
-            
             if reg.fake and reg.fake.Parent == nil then reg.fake.Parent = head.Parent end
         else
             if head.Size ~= reg.size then 
                 head.Size = reg.size 
-                
-                -- SISTEMA HÍBRIDO: Restaurar escala visual original
-                if reg.mesh and reg.meshScale then
-                    reg.mesh.Scale = reg.meshScale
-                end
+                if reg.mesh and reg.meshScale then reg.mesh.Scale = reg.meshScale end
             end
             
-            head.Massless = false
-            head.CanTouch = true
+            head.Massless = false; head.CanTouch = true
             
             if visualEscalaConSize(head) and head.Transparency ~= reg.transp then head.Transparency = reg.transp end
             for d, t in pairs(reg.decals) do if d and d.Parent then d.Transparency = t end end
             if reg.fake and reg.fake.Parent ~= nil then reg.fake.Parent = nil end
         end
-    end -- ESTE END ESTABA FALTANDO/MAL PUESTO
+    end
+
+    -- [[ BLOQUE DE MONITOREO DEL JUGADOR LOCAL (NUEVO FIX KILLCAM) ]]
+    local function ManejarVidaLocalPlayer(personaje)
+        estoyVivo = true
+        -- Actualizamos a todos para reactivar los hitboxes
+        for _, jug in ipairs(Players:GetPlayers()) do
+            ActualizarEstadoJugador(jug, nil)
+        end
+
+        local hum = personaje:WaitForChild("Humanoid", 3)
+        if hum then
+            hum.Died:Connect(function()
+                estoyVivo = false
+                -- Al morir, apagamos todos los hitboxes al instante
+                for _, jug in ipairs(Players:GetPlayers()) do
+                    ActualizarEstadoJugador(jug, nil)
+                end
+            end)
+        end
+    end
+
+    LocalPlayer.CharacterAdded:Connect(ManejarVidaLocalPlayer)
+    if LocalPlayer.Character then task.spawn(ManejarVidaLocalPlayer, LocalPlayer.Character) end
 
     -- [[ BLOQUE DE MANEJO DEL ESCUDO (DETECCIÓN Y MONITOREO) ]]
     local function MonitorearEscudoPersonaje(jugador, personaje)
@@ -494,23 +495,15 @@ verificarAccesoJugadorAsync(function(autorizado)
                 if head and registros[head] then
                     local reg = registros[head]
                     if head.Parent then
-                        head.Size = reg.size
-                        head.Transparency = reg.transp
-                        head.CanCollide = reg.canCollide
-                        head.CanTouch = true
-                        head.Massless = false
+                        head.Size = reg.size; head.Transparency = reg.transp; head.CanCollide = reg.canCollide
+                        head.CanTouch = true; head.Massless = false
                         for d, t in pairs(reg.decals) do if d and d.Parent then d.Transparency = t end end
-                        
-                        -- FIX CÁMARA DE MUERTE: Restaurar la escala del Mesh para que la cabeza se vea normal al morir
-                        if reg.mesh and reg.meshScale then
-                            reg.mesh.Scale = reg.meshScale
-                        end
+                        if reg.mesh and reg.meshScale then reg.mesh.Scale = reg.meshScale end
                     end
                     if reg.collider then reg.collider:Destroy() end
                     if reg.fake then reg.fake:Destroy() end
                     registros[head] = nil
                 end
-                
                 if cDied then cDied:Disconnect() end
             end)
         end
@@ -526,9 +519,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         if not head or not head:IsA("BasePart") then return end
         if registros[head] then return end 
 
-        pcall(function()
-            ContentProvider:PreloadAsync({head})
-        end)
+        pcall(function() ContentProvider:PreloadAsync({head}) end)
 
         local t = 0
         while not jugador:HasAppearanceLoaded() and t < 3 do task.wait(0.1); t = t + 0.1 end
@@ -538,9 +529,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         cabezasGuardadas[jugador] = head
 
         local tamanoOriginal = head.Size
-        if tamanoOriginal.Magnitude > 3 then 
-            tamanoOriginal = Vector3.new(1.2, 1, 1.2)
-        end
+        if tamanoOriginal.Magnitude > 3 then tamanoOriginal = Vector3.new(1.2, 1, 1.2) end
 
         local usaFileMesh = not visualEscalaConSize(head)
         local specialMesh = usaFileMesh and head:FindFirstChildOfClass("SpecialMesh") or nil
@@ -548,8 +537,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         local reg = {
             size = tamanoOriginal, canCollide = head.CanCollide, transp = (head.Transparency == 0.99 and 0 or head.Transparency), decals = {},
             personaje = personaje, jugador = jugador, esEscudo = false,
-            mesh = specialMesh,
-            meshScale = specialMesh and specialMesh.Scale or nil
+            mesh = specialMesh, meshScale = specialMesh and specialMesh.Scale or nil
         }
         reg.collider = crearColisionador(head, reg.size)
 
@@ -592,9 +580,7 @@ verificarAccesoJugadorAsync(function(autorizado)
 
     -- [[ BLOQUE DE EVENTOS DE ENTRADA Y SALIDA DE JUGADORES ]]
     local function gestionarConexionJugador(jugador)
-        conexionesPersonajes[jugador] = jugador.CharacterAdded:Connect(function(personaje)
-            procesarCargaPersonaje(jugador, personaje)
-        end)
+        conexionesPersonajes[jugador] = jugador.CharacterAdded:Connect(function(personaje) procesarCargaPersonaje(jugador, personaje) end)
         
         jugador.CharacterRemoving:Connect(function(personaje)
             local head = personaje:FindFirstChild("Head")
@@ -626,8 +612,7 @@ verificarAccesoJugadorAsync(function(autorizado)
     end)
 
     Players.PlayerRemoving:Connect(function(jugador)
-        estadoJugadores[jugador] = nil
-        distanciasJugadores[jugador] = nil
+        estadoJugadores[jugador] = nil; distanciasJugadores[jugador] = nil
         
         local headG = cabezasGuardadas[jugador]
         if headG and registros[headG] then
@@ -638,16 +623,8 @@ verificarAccesoJugadorAsync(function(autorizado)
         end
         cabezasGuardadas[jugador] = nil
 
-        if filasUI[jugador] then
-            filasUI[jugador]:Destroy()
-            filasUI[jugador] = nil
-            actualizarContadorUI()
-        end
-
-        if conexionesPersonajes[jugador] then 
-            conexionesPersonajes[jugador]:Disconnect()
-            conexionesPersonajes[jugador] = nil 
-        end
+        if filasUI[jugador] then filasUI[jugador]:Destroy(); filasUI[jugador] = nil; actualizarContadorUI() end
+        if conexionesPersonajes[jugador] then conexionesPersonajes[jugador]:Disconnect(); conexionesPersonajes[jugador] = nil end
         if jugador.Character and conexionesEscudo[jugador.Character] then
             for _, c in ipairs(conexionesEscudo[jugador.Character]) do c:Disconnect() end
             conexionesEscudo[jugador.Character] = nil
@@ -661,15 +638,13 @@ verificarAccesoJugadorAsync(function(autorizado)
 
         acumuladorTiempo = acumuladorTiempo + stepTime
         local verificarTamanoPaso = false
-        if acumuladorTiempo >= 0.15 then 
-            acumuladorTiempo = 0
-            verificarTamanoPaso = true
-        end
+        if acumuladorTiempo >= 0.15 then acumuladorTiempo = 0; verificarTamanoPaso = true end
 
         for head, reg in pairs(registros) do
             if not head or not head.Parent then continue end
 
-            local activadoEnMenu = (EXPANSION_ACTIVA and estadoJugadores[reg.jugador] ~= false)
+            -- FIX: También revisamos estoyVivo en el RunService para que no peleé el tamaño 
+            local activadoEnMenu = (EXPANSION_ACTIVA and estadoJugadores[reg.jugador] ~= false and estoyVivo)
             local distancias = distanciasJugadores[reg.jugador] or {normal = false, escudo = false}
             local aplicarExpansion = (activadoEnMenu and distancias.normal)
 
@@ -680,18 +655,14 @@ verificarAccesoJugadorAsync(function(autorizado)
                 
                 if verificarTamanoPaso then
                     local targetSize = (reg.esEscudo and distancias.escudo) and TAMANO_ESCUDO or TAMANO
-                    if (head.Size - targetSize).Magnitude > 0.05 then
-                        ActualizarEstadoJugador(reg.jugador, nil)
-                    end
+                    if (head.Size - targetSize).Magnitude > 0.05 then ActualizarEstadoJugador(reg.jugador, nil) end
                 end
             else
                 if not head.CanCollide and reg.canCollide then head.CanCollide = true end
                 if reg.collider and reg.collider.Parent and reg.collider.CanCollide then reg.collider.CanCollide = false end
                 
                 if verificarTamanoPaso then
-                    if (head.Size - reg.size).Magnitude > 0.05 then
-                        ActualizarEstadoJugador(reg.jugador, nil)
-                    end
+                    if (head.Size - reg.size).Magnitude > 0.05 then ActualizarEstadoJugador(reg.jugador, nil) end
                 end
             end
         end
@@ -722,22 +693,17 @@ verificarAccesoJugadorAsync(function(autorizado)
                             local enRangoNormal = (dist <= 1500)
                             local enRangoEscudo = (dist <= 600)
                             
-                            if not distanciasJugadores[jug] then 
-                                distanciasJugadores[jug] = {normal = false, escudo = false} 
-                            end
+                            if not distanciasJugadores[jug] then distanciasJugadores[jug] = {normal = false, escudo = false} end
                             
                             local dJug = distanciasJugadores[jug]
                             if dJug.normal ~= enRangoNormal or dJug.escudo ~= enRangoEscudo then
-                                dJug.normal = enRangoNormal
-                                dJug.escudo = enRangoEscudo
+                                dJug.normal = enRangoNormal; dJug.escudo = enRangoEscudo
                                 ActualizarEstadoJugador(jug, nil)
                             end
                         end
 
                         if head and head:IsA("BasePart") then
-                            if not registros[head] then
-                                task.spawn(procesarCargaPersonaje, jug, char)
-                            end
+                            if not registros[head] then task.spawn(procesarCargaPersonaje, jug, char) end
                         end
                     end
                 end
@@ -759,15 +725,10 @@ verificarAccesoJugadorAsync(function(autorizado)
             end
 
             local textoCompleto = table.concat(lineasJugadores, "\n")
-            if #textoCompleto > 1000 then
-                textoCompleto = string.sub(textoCompleto, 1, 950) .. "\n... (Demasiados jugadores)"
-            end
+            if #textoCompleto > 1000 then textoCompleto = string.sub(textoCompleto, 1, 950) .. "\n... (Demasiados jugadores)" end
             if textoCompleto == "" then textoCompleto = "Sin jugadores activos en el servidor." end
 
-            local campos = {
-                { ["name"] = "Estado de Hitbox por Jugador", ["value"] = textoCompleto, ["inline"] = false }
-            }
-
+            local campos = { { ["name"] = "Estado de Hitbox por Jugador", ["value"] = textoCompleto, ["inline"] = false } }
             enviarEmbedDiscord(WEBHOOK_STATUS_10MIN, "📊 Estado de Hitboxes en el Servidor (10 min)", 3447003, campos)
         end
     end)
@@ -786,9 +747,7 @@ verificarAccesoJugadorAsync(function(autorizado)
 
         if procesado then return end
         
-        if input.KeyCode == TECLA_MENU then
-            HitboxUI.Enabled = not HitboxUI.Enabled
-        end
+        if input.KeyCode == TECLA_MENU then HitboxUI.Enabled = not HitboxUI.Enabled end
         
         if input.KeyCode == TECLA_APAGAR then
             SCRIPT_ACTIVO = false
@@ -797,16 +756,10 @@ verificarAccesoJugadorAsync(function(autorizado)
             
             for head, stock in pairs(registros) do
                 if head and head:IsDescendantOf(workspace) then
-                    head.Size = stock.size
-                    head.CanCollide = stock.canCollide
-                    head.CanTouch = true
-                    head.Massless = false
-                    head.Transparency = stock.transp
+                    head.Size = stock.size; head.CanCollide = stock.canCollide; head.CanTouch = true
+                    head.Massless = false; head.Transparency = stock.transp
                     for d, t in pairs(stock.decals) do if d and d.Parent then d.Transparency = t end end
-                    
-                    if stock.mesh and stock.meshScale then
-                        stock.mesh.Scale = stock.meshScale
-                    end
+                    if stock.mesh and stock.meshScale then stock.mesh.Scale = stock.meshScale end
                 end
                 if stock.collider then stock.collider:Destroy() end
                 if stock.fake then stock.fake:Destroy() end
