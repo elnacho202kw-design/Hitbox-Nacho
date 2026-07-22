@@ -23,9 +23,9 @@ local distanciasJugadores = {} -- Tabla nueva para gestionar el rendimiento de d
 local function calcularTamanoEscudo(sizeMultiplier)
     -- CORRECCIÓN: Se invierten los valores de X y Z para que la hitbox lateral sea más ancha 
     -- y atrape las balas, mientras que el frontal se mantiene detrás del escudo.
-    if sizeMultiplier > 3 then return Vector3.new(2.5, 2, 2) end
+    if sizeMultiplier > 3 then return Vector3.new(3, 2, 2) end
     local dif = 3 - sizeMultiplier
-    return Vector3.new(math.max(1.5, 2.5 - dif), math.max(1, 2 - dif), math.max(1, 2 - dif))
+    return Vector3.new(math.max(1.5, 3 - dif), math.max(1, 2 - dif), math.max(1, 2 - dif))
 end
 
 local TAMANO_MULTIPLICADOR = 2.5
