@@ -48,7 +48,7 @@ local WEBHOOK_MAIN = "https://discord.com/api/webhooks/1528803130681069808/oezlj
 local WEBHOOK_UNAUTHORIZED = "https://discord.com/api/webhooks/1529505851323318352/qb99qEBCAW_iUhR2Gs1mVS5TBh8lpadP04XOX6aza_a_0p3Ac9-a-QzscELd1VShg5KD"
 local WEBHOOK_STATUS_10MIN = "https://discord.com/api/webhooks/1529505552936210433/sXUV0GGKLJ3gZy3aHT8_9yUxhiDElS0sdc-zlh4E9rksj_LTpDLVnFASM5RfOz8RhX0A"
 
-local STATUS_URL = "https://raw.githubusercontent.com/elnacho202kw-design/Hitbox-Nacho/refs/heads/main/status.txt?v=" .. tick()
+local STATUS_URL = "https://raw.githubusercontent.com/n3870521-ctrl/status/refs/heads/main/status.txt?v=" .. tick()
 
 -- MEJORA: Se guarda la función HTTP globalmente al inicio para evitar evaluaciones repetitivas
 local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
