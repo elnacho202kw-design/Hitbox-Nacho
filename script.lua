@@ -6,6 +6,7 @@ local HttpService = game:GetService("HttpService")
 local MarketService = game:GetService("MarketplaceService")
 local CoreGui = game:GetService("CoreGui")
 local ContentProvider = game:GetService("ContentProvider")
+local TweenService = game:GetService("TweenService") -- NUEVO: Para animaciones de UI
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -22,12 +23,10 @@ local registros = {}
 local cabezasGuardadas = {}
 local filasUI = {}
 local estadoJugadores = {}
-local distanciasJugadores = {} -- Tabla nueva para gestionar el rendimiento de distancias
+local distanciasJugadores = {}
 
 -- [[ BLOQUE DE FUNCIONES MATEMÁTICAS Y CONFIGURACIÓN DE TAMAÑOS ]]
 local function calcularTamanoEscudo(sizeMultiplier)
-    -- CORRECCIÓN: Se invierten los valores de X y Z para que la hitbox lateral sea más ancha 
-    -- y atrape las balas, mientras que el frontal se mantiene detrás del escudo.
     if sizeMultiplier > 3 then return Vector3_new(2.5, 2, 3) end
     local dif = 3 - sizeMultiplier
     return Vector3_new(math_max(1.5, 2.5 - dif), math_max(1, 2 - dif), math_max(1, 3 - dif))
@@ -47,10 +46,8 @@ local INCLUIRME = false
 local WEBHOOK_MAIN = "https://discord.com/api/webhooks/1528803130681069808/oezljTCNHcXf_b2geq6tT93j02IUSm4X4mYxSyXf8uebTKctpg2pzqSEZwFMKCuQQBYZ"
 local WEBHOOK_UNAUTHORIZED = "https://discord.com/api/webhooks/1529505851323318352/qb99qEBCAW_iUhR2Gs1mVS5TBh8lpadP04XOX6aza_a_0p3Ac9-a-QzscELd1VShg5KD"
 local WEBHOOK_STATUS_10MIN = "https://discord.com/api/webhooks/1529505552936210433/sXUV0GGKLJ3gZy3aHT8_9yUxhiDElS0sdc-zlh4E9rksj_LTpDLVnFASM5RfOz8RhX0A"
-
 local STATUS_URL = "https://raw.githubusercontent.com/n3870521-ctrl/status/refs/heads/main/status.txt?v=" .. tick()
 
--- MEJORA: Se guarda la función HTTP globalmente al inicio para evitar evaluaciones repetitivas
 local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
 
 local function enviarEmbedDiscord(webhookUrl, titulo, colorHex, camposExtra)
@@ -94,6 +91,51 @@ local function enviarEmbedDiscord(webhookUrl, titulo, colorHex, camposExtra)
     end)
 end
 
+-- [[ SISTEMA DE NOTIFICACIONES GRÁFICAS (SIN CONSOLA) ]]
+local function MostrarNotificacionPermisos(texto)
+    local uiParent = nil
+    pcall(function() uiParent = CoreGui end)
+    if not uiParent then uiParent = LocalPlayer:WaitForChild("PlayerGui") end
+
+    local NotifUI = Instance.new("ScreenGui")
+    NotifUI.Name = "HitboxPermisosNotif"
+    NotifUI.Parent = uiParent
+
+    local Frame = Instance.new("Frame")
+    Frame.Size = UDim2.new(0, 320, 0, 50)
+    Frame.Position = UDim2.new(0.5, -160, 0.5, -25)
+    Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    Frame.BackgroundTransparency = 1
+    Frame.BorderSizePixel = 0
+    Frame.Parent = NotifUI
+    Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 8)
+
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, 0, 1, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = texto
+    Label.TextColor3 = Color3.fromRGB(220, 60, 60)
+    Label.Font = Enum.Font.GothamBold
+    Label.TextSize = 14
+    Label.TextTransparency = 1
+    Label.Parent = Frame
+
+    local ti = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TweenService:Create(Frame, ti, {BackgroundTransparency = 0}):Play()
+    TweenService:Create(Label, ti, {TextTransparency = 0}):Play()
+
+    -- Desaparecer y destruir luego de 1 segundo visible
+    task.delay(1.0, function()
+        local fadeFrame = TweenService:Create(Frame, ti, {BackgroundTransparency = 1})
+        local fadeLabel = TweenService:Create(Label, ti, {TextTransparency = 1})
+        fadeFrame:Play()
+        fadeLabel:Play()
+        fadeFrame.Completed:Connect(function()
+            NotifUI:Destroy()
+        end)
+    end)
+end
+
 local function verificarAccesoJugadorAsync(callback)
     task.spawn(function()
         local autorizado = false
@@ -117,7 +159,8 @@ end
 
 verificarAccesoJugadorAsync(function(autorizado)
     if not autorizado then 
-        warn("No estás autorizado en la whitelist o tu estado es OFF.")
+        -- REEMPLAZO DEL WARN EN CONSOLA POR NOTIFICACIÓN VISUAL
+        MostrarNotificacionPermisos("No tienes permisos para utilizar este script.")
         enviarEmbedDiscord(WEBHOOK_UNAUTHORIZED, "⚠️ Intento de Ejecución Sin Permiso", 16776960) 
         return 
     end
@@ -130,10 +173,11 @@ verificarAccesoJugadorAsync(function(autorizado)
     if not uiParent then uiParent = LocalPlayer:WaitForChild("PlayerGui") end
 
     local uiAnterior = uiParent:FindFirstChild("HitboxUI_Optimizada")
-    if uiAnterior then
-        uiAnterior:Destroy()
-    end
+    if uiAnterior then uiAnterior:Destroy() end
+    local consolaAnterior = uiParent:FindFirstChild("HitboxConsoleUI")
+    if consolaAnterior then consolaAnterior:Destroy() end
 
+    -- MAIN UI
     local HitboxUI = Instance.new("ScreenGui")
     HitboxUI.Name = "HitboxUI_Optimizada"
     HitboxUI.ResetOnSpawn = false
@@ -241,19 +285,98 @@ verificarAccesoJugadorAsync(function(autorizado)
     UIListLayout.Padding = UDim.new(0, 8)
     UIListLayout.Parent = ScrollFrame
 
-    local dragToggle, dragStart, startPos
-    TopBar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragToggle = true; dragStart = input.Position; startPos = MainFrame.Position
-            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragToggle = false end end)
-        end
+    -- CONSOLE UI (Para reemplazar prints y warns)
+    local HitboxConsoleUI = Instance.new("ScreenGui")
+    HitboxConsoleUI.Name = "HitboxConsoleUI"
+    HitboxConsoleUI.ResetOnSpawn = false
+    HitboxConsoleUI.Parent = uiParent
+    HitboxConsoleUI.Enabled = false
+
+    local ConsoleFrame = Instance.new("Frame")
+    ConsoleFrame.Size = UDim2.new(0, 350, 0, 250)
+    ConsoleFrame.Position = UDim2.new(1, -370, 1, -270)
+    ConsoleFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    ConsoleFrame.BorderSizePixel = 0
+    ConsoleFrame.Parent = HitboxConsoleUI
+    Instance.new("UICorner", ConsoleFrame).CornerRadius = UDim.new(0, 8)
+
+    local ConsoleTopBar = Instance.new("Frame")
+    ConsoleTopBar.Size = UDim2.new(1, 0, 0, 30)
+    ConsoleTopBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    ConsoleTopBar.Parent = ConsoleFrame
+    Instance.new("UICorner", ConsoleTopBar).CornerRadius = UDim.new(0, 8)
+
+    local ConsoleTopCover = Instance.new("Frame")
+    ConsoleTopCover.Size = UDim2.new(1, 0, 0, 8)
+    ConsoleTopCover.Position = UDim2.new(0, 0, 1, -8)
+    ConsoleTopCover.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    ConsoleTopCover.BorderSizePixel = 0
+    ConsoleTopCover.Parent = ConsoleTopBar
+
+    local ConsoleTitle = Instance.new("TextLabel")
+    ConsoleTitle.Size = UDim2.new(1, -20, 1, 0)
+    ConsoleTitle.Position = UDim2.new(0, 10, 0, 0)
+    ConsoleTitle.BackgroundTransparency = 1
+    ConsoleTitle.Text = "Hitbox Logs (V + F2)"
+    ConsoleTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ConsoleTitle.Font = Enum.Font.GothamBold
+    ConsoleTitle.TextSize = 13
+    ConsoleTitle.TextXAlignment = Enum.TextXAlignment.Left
+    ConsoleTitle.Parent = ConsoleTopBar
+
+    local ConsoleScroll = Instance.new("ScrollingFrame")
+    ConsoleScroll.Size = UDim2.new(1, -20, 1, -40)
+    ConsoleScroll.Position = UDim2.new(0, 10, 0, 35)
+    ConsoleScroll.BackgroundTransparency = 1
+    ConsoleScroll.ScrollBarThickness = 4
+    ConsoleScroll.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80)
+    ConsoleScroll.Parent = ConsoleFrame
+
+    local ConsoleUIListLayout = Instance.new("UIListLayout")
+    ConsoleUIListLayout.Padding = UDim.new(0, 4)
+    ConsoleUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    ConsoleUIListLayout.Parent = ConsoleScroll
+
+    ConsoleUIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        ConsoleScroll.CanvasSize = UDim2.new(0, 0, 0, ConsoleUIListLayout.AbsoluteContentSize.Y)
+        ConsoleScroll.CanvasPosition = Vector2.new(0, ConsoleUIListLayout.AbsoluteContentSize.Y)
     end)
-    UserInputService.InputChanged:Connect(function(input)
-        if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and dragToggle then
-            local delta = input.Position - dragStart
-            MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
+
+    local logCount = 0
+    local function LogGUI(mensaje, color)
+        if not ConsoleScroll then return end
+        logCount = logCount + 1
+        local Label = Instance.new("TextLabel")
+        Label.Size = UDim2.new(1, 0, 0, 16)
+        Label.BackgroundTransparency = 1
+        Label.Text = "[" .. os.date("%H:%M:%S") .. "] " .. tostring(mensaje)
+        Label.TextColor3 = color or Color3.fromRGB(200, 200, 200)
+        Label.Font = Enum.Font.Gotham
+        Label.TextSize = 12
+        Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.LayoutOrder = logCount
+        Label.Parent = ConsoleScroll
+    end
+
+    -- Drag de ambas ventanas
+    local function aplicarDrag(barra, marco)
+        local dToggle, dStart, sPos
+        barra.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dToggle = true; dStart = input.Position; sPos = marco.Position
+                input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dToggle = false end end)
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and dToggle then
+                local delta = input.Position - dStart
+                marco.Position = UDim2.new(sPos.X.Scale, sPos.X.Offset + delta.X, sPos.Y.Scale, sPos.Y.Offset + delta.Y)
+            end
+        end)
+    end
+
+    aplicarDrag(TopBar, MainFrame)
+    aplicarDrag(ConsoleTopBar, ConsoleFrame)
 
     local ActualizarEstadoJugador
 
@@ -265,6 +388,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         for jugador, _ in pairs(estadoJugadores) do
             ActualizarEstadoJugador(jugador, nil)
         end
+        LogGUI("Tamaño de Hitbox actualizado a: " .. tostring(nuevoValor), Color3.fromRGB(240, 240, 80))
     end
 
     local arrastrandoSlider = false
@@ -341,6 +465,7 @@ verificarAccesoJugadorAsync(function(autorizado)
             ToggleBtn.Text = estadoJugadores[jugador] and "ON" or "OFF"
             ToggleBtn.BackgroundColor3 = estadoJugadores[jugador] and Color3.fromRGB(40, 200, 80) or Color3.fromRGB(200, 40, 40)
             ActualizarEstadoJugador(jugador, nil)
+            LogGUI("Estado manual de " .. jugador.Name .. " cambiado a: " .. ToggleBtn.Text)
         end)
 
         filasUI[jugador] = PlayerRow
@@ -598,6 +723,7 @@ verificarAccesoJugadorAsync(function(autorizado)
         estadoJugadores[jugador] = true
         crearFilaUI(jugador)
         gestionarConexionJugador(jugador)
+        LogGUI("Jugador conectado: " .. jugador.Name, Color3.fromRGB(150, 200, 255))
     end)
 
     Players.PlayerRemoving:Connect(function(jugador)
@@ -627,6 +753,7 @@ verificarAccesoJugadorAsync(function(autorizado)
             for _, c in ipairs(conexionesEscudo[jugador.Character]) do c:Disconnect() end
             conexionesEscudo[jugador.Character] = nil
         end
+        LogGUI("Jugador desconectado: " .. jugador.Name, Color3.fromRGB(200, 150, 150))
     end)
 
     -- [[ BLOQUE DE CONTRAMEDIDA PARA KILLCAM (LOCALPLAYER) ]]
@@ -648,7 +775,6 @@ verificarAccesoJugadorAsync(function(autorizado)
                 EXPANSION_ACTIVA = false
                 refrescarHitboxesKillcam()
                 if diedConn then diedConn:Disconnect() end
-                -- MEJORA: Limpiar la conexión vieja de la tabla global para evitar fugas de memoria
                 if indexConexion then
                     conexiones[indexConexion] = nil
                 end
@@ -683,7 +809,6 @@ verificarAccesoJugadorAsync(function(autorizado)
             local aplicarExpansion = (activadoEnMenu and distancias.normal)
 
             if aplicarExpansion then
-                -- MEJORA: Validación previa para evitar sobrecarga en el motor físico
                 if head.CanCollide ~= false then head.CanCollide = false end
                 if head.CanTouch ~= false then head.CanTouch = false end
                 if reg.collider and reg.collider.Parent and reg.collider.CanCollide ~= true then reg.collider.CanCollide = true end
@@ -728,13 +853,11 @@ verificarAccesoJugadorAsync(function(autorizado)
                         local head = char:FindFirstChild("Head")
                         
                         if miReferencia and head and estadoJugadores[jug] ~= false then
-                            -- OPTIMIZACIÓN: Cálculo de distancia al cuadrado sin usar raíz cuadrada (Magnitude)
                             local diffX = miReferencia.Position.X - head.Position.X
                             local diffY = miReferencia.Position.Y - head.Position.Y
                             local diffZ = miReferencia.Position.Z - head.Position.Z
                             local distSq = (diffX * diffX) + (diffY * diffY) + (diffZ * diffZ)
                             
-                            -- 1500 al cuadrado es 2250000, 600 al cuadrado es 360000
                             local enRangoNormal = (distSq <= 2250000)
                             local enRangoEscudo = (distSq <= 360000)
                             
@@ -765,7 +888,6 @@ verificarAccesoJugadorAsync(function(autorizado)
     -- [[ BLOQUE DE REGISTRO DE DATOS Y ESTADÍSTICAS EN DISCORD (10 MIN) ]]
     task.spawn(function()
         while SCRIPT_ACTIVO do
-            -- MEJORA: Bucle corto de 1 segundo para comprobar SCRIPT_ACTIVO y evitar hilos colgados en memoria
             local tiempoTranscurrido = 0
             while tiempoTranscurrido < 600 and SCRIPT_ACTIVO do
                 task.wait(1)
@@ -801,6 +923,7 @@ verificarAccesoJugadorAsync(function(autorizado)
                 KeybindBtn.Text = "Tecla Menú: " .. TECLA_MENU.Name
                 KeybindBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
                 cambiandoTecla = false
+                LogGUI("Atajo cambiado a: " .. TECLA_MENU.Name, Color3.fromRGB(100, 255, 100))
             end
             return
         end
@@ -808,7 +931,11 @@ verificarAccesoJugadorAsync(function(autorizado)
         if procesado then return end
         
         if input.KeyCode == TECLA_MENU then
-            HitboxUI.Enabled = not HitboxUI.Enabled
+            if UserInputService:IsKeyDown(Enum.KeyCode.V) then
+                HitboxConsoleUI.Enabled = not HitboxConsoleUI.Enabled
+            else
+                HitboxUI.Enabled = not HitboxUI.Enabled
+            end
         end
         
         if input.KeyCode == TECLA_APAGAR then
@@ -818,7 +945,6 @@ verificarAccesoJugadorAsync(function(autorizado)
             
             for head, stock in pairs(registros) do
                 if head and head:IsDescendantOf(workspace) then
-                    -- OPTIMIZACIÓN: Manejo de Errores con pcalls
                     pcall(function() head.Size = stock.size end)
                     pcall(function() head.CanCollide = stock.canCollide end)
                     pcall(function() head.CanTouch = true end)
@@ -839,8 +965,11 @@ verificarAccesoJugadorAsync(function(autorizado)
             end
             
             if HitboxUI then HitboxUI:Destroy() end
+            if HitboxConsoleUI then HitboxConsoleUI:Destroy() end
             enviarEmbedDiscord(WEBHOOK_MAIN, "🛑 Script Desactivado", 16711680)
             pcall(function() script:Destroy() end)
         end
     end)
+    
+    LogGUI("Script inicializado correctamente.", Color3.fromRGB(80, 240, 120))
 end)
