@@ -125,7 +125,7 @@ local function MostrarNotificacionPermisos(texto)
     TweenService:Create(Label, ti, {TextTransparency = 0}):Play()
 
     -- Desaparecer y destruir luego de 1 segundo visible
-    task.delay(1.0, function()
+    task.delay(4.0, function()
         local fadeFrame = TweenService:Create(Frame, ti, {BackgroundTransparency = 1})
         local fadeLabel = TweenService:Create(Label, ti, {TextTransparency = 1})
         fadeFrame:Play()
