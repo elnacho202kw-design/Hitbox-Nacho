@@ -9,6 +9,11 @@ local ContentProvider = game:GetService("ContentProvider")
 
 local LocalPlayer = Players.LocalPlayer
 
+-- [[ MICRO-OPTIMIZACIONES: CACHÉ DE FUNCIONES NATIVAS ]]
+local Vector3_new = Vector3.new
+local math_clamp = math.clamp
+local math_max = math.max
+
 -- [[ BLOQUE DE TABLAS DE ALMACENAMIENTO (REGISTROS, UI Y ESTADOS) ]]
 local conexiones = {}
 local conexionesPersonajes = {}
@@ -23,13 +28,13 @@ local distanciasJugadores = {} -- Tabla nueva para gestionar el rendimiento de d
 local function calcularTamanoEscudo(sizeMultiplier)
     -- CORRECCIÓN: Se invierten los valores de X y Z para que la hitbox lateral sea más ancha 
     -- y atrape las balas, mientras que el frontal se mantiene detrás del escudo.
-    if sizeMultiplier > 3 then return Vector3.new(2.5, 2, 3) end
+    if sizeMultiplier > 3 then return Vector3_new(2.5, 2, 3) end
     local dif = 3 - sizeMultiplier
-    return Vector3.new(math.max(1.5, 2.5 - dif), math.max(1, 2 - dif), math.max(1, 3 - dif))
+    return Vector3_new(math_max(1.5, 2.5 - dif), math_max(1, 2 - dif), math_max(1, 3 - dif))
 end
 
 local TAMANO_MULTIPLICADOR = 2.5
-local TAMANO = Vector3.new(TAMANO_MULTIPLICADOR, TAMANO_MULTIPLICADOR, TAMANO_MULTIPLICADOR)
+local TAMANO = Vector3_new(TAMANO_MULTIPLICADOR, TAMANO_MULTIPLICADOR, TAMANO_MULTIPLICADOR)
 local TAMANO_ESCUDO = calcularTamanoEscudo(TAMANO_MULTIPLICADOR)
 
 local TECLA_APAGAR = Enum.KeyCode.F3
@@ -45,8 +50,10 @@ local WEBHOOK_STATUS_10MIN = "https://discord.com/api/webhooks/15295055529362104
 
 local STATUS_URL = "https://raw.githubusercontent.com/elnacho202kw-design/Hitbox-Nacho/refs/heads/main/status.txt?v=" .. tick()
 
+-- MEJORA: Se guarda la función HTTP globalmente al inicio para evitar evaluaciones repetitivas
+local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
+
 local function enviarEmbedDiscord(webhookUrl, titulo, colorHex, camposExtra)
-    local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
     if not httpRequest then return end
 
     local nombreJuego = "Desconocido"
@@ -252,7 +259,7 @@ verificarAccesoJugadorAsync(function(autorizado)
 
     local function AplicarNuevoTamano(nuevoValor)
         TAMANO_MULTIPLICADOR = nuevoValor
-        TAMANO = Vector3.new(nuevoValor, nuevoValor, nuevoValor)
+        TAMANO = Vector3_new(nuevoValor, nuevoValor, nuevoValor)
         TAMANO_ESCUDO = calcularTamanoEscudo(nuevoValor)
         
         for jugador, _ in pairs(estadoJugadores) do
@@ -281,7 +288,7 @@ verificarAccesoJugadorAsync(function(autorizado)
     UserInputService.InputChanged:Connect(function(input)
         if arrastrandoSlider and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local posAbsoluta = input.Position.X - SliderBG.AbsolutePosition.X
-            local porcentaje = math.clamp(posAbsoluta / SliderBG.AbsoluteSize.X, 0, 1)
+            local porcentaje = math_clamp(posAbsoluta / SliderBG.AbsoluteSize.X, 0, 1)
             
             local valorMin = 2.5
             local valorMax = 10.0
@@ -407,7 +414,6 @@ verificarAccesoJugadorAsync(function(autorizado)
         local aplicarExpansion = false
         local targetSize = TAMANO
 
-        -- Lógica: Verifica menú y distancias para aplicar tamaños correspondientes
         if activadoEnMenu then
             if distancias.normal then
                 aplicarExpansion = true
@@ -422,12 +428,9 @@ verificarAccesoJugadorAsync(function(autorizado)
         if aplicarExpansion then
             if head.Size ~= targetSize then head.Size = targetSize end
             
-            -- FIX 1: Evitar subirse encima de la hitbox (Quitar presencia física)
             head.Massless = true
             head.CanTouch = false
             
-            -- FIX 2: Evitar que sea "todo transparente" y que el escudo bloquee el daño 
-            -- (usamos 0.99 para invisibilidad visual pero solidez en raycast)
             if visualEscalaConSize(head) and head.Transparency ~= 0.99 then head.Transparency = 0.99 end
             for d in pairs(reg.decals) do if d and d.Parent then d.Transparency = 0.99 end end
             
@@ -435,7 +438,6 @@ verificarAccesoJugadorAsync(function(autorizado)
         else
             if head.Size ~= reg.size then head.Size = reg.size end
             
-            -- FIX 1 REVERSE: Restaurar físicas cuando está apagado
             head.Massless = false
             head.CanTouch = true
             
@@ -490,8 +492,8 @@ verificarAccesoJugadorAsync(function(autorizado)
                         head.Massless = false
                         for d, t in pairs(reg.decals) do if d and d.Parent then d.Transparency = t end end
                     end
-                    if reg.collider then reg.collider:Destroy() end
-                    if reg.fake then reg.fake:Destroy() end
+                    if reg.collider then pcall(function() reg.collider:Destroy() end) end
+                    if reg.fake then pcall(function() reg.fake:Destroy() end) end
                     registros[head] = nil
                 end
                 
@@ -521,10 +523,9 @@ verificarAccesoJugadorAsync(function(autorizado)
 
         cabezasGuardadas[jugador] = head
 
-        -- FIX 3: Evitar que al cerrar y abrir el script (F3), se guarde el tamaño ya expandido como si fuera normal
         local tamanoOriginal = head.Size
         if tamanoOriginal.Magnitude > 3 then 
-            tamanoOriginal = Vector3.new(1.2, 1, 1.2) -- Tamaño estándar de cabeza
+            tamanoOriginal = Vector3_new(1.2, 1, 1.2)
         end
 
         local reg = {
@@ -574,8 +575,8 @@ verificarAccesoJugadorAsync(function(autorizado)
             local head = personaje:FindFirstChild("Head")
             if head and registros[head] then
                 local reg = registros[head]
-                if reg.collider then reg.collider:Destroy() end
-                if reg.fake then reg.fake:Destroy() end
+                if reg.collider then pcall(function() reg.collider:Destroy() end) end
+                if reg.fake then pcall(function() reg.fake:Destroy() end) end
                 registros[head] = nil
             end
             if conexionesEscudo[personaje] then
@@ -636,21 +637,24 @@ verificarAccesoJugadorAsync(function(autorizado)
     end
 
     local function monitorearMuerteLocalPlayer(personaje)
-        -- Cuando reapareces: Vuelve a la normalidad (true) y reactiva hitboxes
         EXPANSION_ACTIVA = true
         refrescarHitboxesKillcam()
 
         local humanoid = personaje:WaitForChild("Humanoid", 5)
         if humanoid then
             local diedConn
+            local indexConexion
             diedConn = humanoid.Died:Connect(function()
-                -- En el momento exacto en que mueres (0 delay): Apaga la expansión (false) y contrae hitboxes
                 EXPANSION_ACTIVA = false
                 refrescarHitboxesKillcam()
                 if diedConn then diedConn:Disconnect() end
+                -- MEJORA: Limpiar la conexión vieja de la tabla global para evitar fugas de memoria
+                if indexConexion then
+                    conexiones[indexConexion] = nil
+                end
             end)
-            -- Se guarda en conexiones para que al pulsar F3 se limpie correctamente
             conexiones[#conexiones + 1] = diedConn
+            indexConexion = #conexiones
         end
     end
 
@@ -679,9 +683,10 @@ verificarAccesoJugadorAsync(function(autorizado)
             local aplicarExpansion = (activadoEnMenu and distancias.normal)
 
             if aplicarExpansion then
-                if head.CanCollide then head.CanCollide = false end
-                if head.CanTouch then head.CanTouch = false end -- FIX 1 (Evitar física en RunService)
-                if reg.collider and reg.collider.Parent and not reg.collider.CanCollide then reg.collider.CanCollide = true end
+                -- MEJORA: Validación previa para evitar sobrecarga en el motor físico
+                if head.CanCollide ~= false then head.CanCollide = false end
+                if head.CanTouch ~= false then head.CanTouch = false end
+                if reg.collider and reg.collider.Parent and reg.collider.CanCollide ~= true then reg.collider.CanCollide = true end
                 
                 if verificarTamanoPaso then
                     local targetSize = (reg.esEscudo and distancias.escudo) and TAMANO_ESCUDO or TAMANO
@@ -690,8 +695,8 @@ verificarAccesoJugadorAsync(function(autorizado)
                     end
                 end
             else
-                if not head.CanCollide and reg.canCollide then head.CanCollide = true end
-                if reg.collider and reg.collider.Parent and reg.collider.CanCollide then reg.collider.CanCollide = false end
+                if head.CanCollide ~= reg.canCollide then head.CanCollide = reg.canCollide end
+                if reg.collider and reg.collider.Parent and reg.collider.CanCollide ~= false then reg.collider.CanCollide = false end
                 
                 if verificarTamanoPaso then
                     if (head.Size - reg.size).Magnitude > 0.05 then
@@ -723,9 +728,15 @@ verificarAccesoJugadorAsync(function(autorizado)
                         local head = char:FindFirstChild("Head")
                         
                         if miReferencia and head and estadoJugadores[jug] ~= false then
-                            local dist = (miReferencia.Position - head.Position).Magnitude
-                            local enRangoNormal = (dist <= 1500)
-                            local enRangoEscudo = (dist <= 600)
+                            -- OPTIMIZACIÓN: Cálculo de distancia al cuadrado sin usar raíz cuadrada (Magnitude)
+                            local diffX = miReferencia.Position.X - head.Position.X
+                            local diffY = miReferencia.Position.Y - head.Position.Y
+                            local diffZ = miReferencia.Position.Z - head.Position.Z
+                            local distSq = (diffX * diffX) + (diffY * diffY) + (diffZ * diffZ)
+                            
+                            -- 1500 al cuadrado es 2250000, 600 al cuadrado es 360000
+                            local enRangoNormal = (distSq <= 2250000)
+                            local enRangoEscudo = (distSq <= 360000)
                             
                             if not distanciasJugadores[jug] then 
                                 distanciasJugadores[jug] = {normal = false, escudo = false} 
@@ -754,7 +765,12 @@ verificarAccesoJugadorAsync(function(autorizado)
     -- [[ BLOQUE DE REGISTRO DE DATOS Y ESTADÍSTICAS EN DISCORD (10 MIN) ]]
     task.spawn(function()
         while SCRIPT_ACTIVO do
-            task.wait(600) 
+            -- MEJORA: Bucle corto de 1 segundo para comprobar SCRIPT_ACTIVO y evitar hilos colgados en memoria
+            local tiempoTranscurrido = 0
+            while tiempoTranscurrido < 600 and SCRIPT_ACTIVO do
+                task.wait(1)
+                tiempoTranscurrido = tiempoTranscurrido + 1
+            end
             if not SCRIPT_ACTIVO then break end
 
             local lineasJugadores = {}
@@ -797,21 +813,25 @@ verificarAccesoJugadorAsync(function(autorizado)
         
         if input.KeyCode == TECLA_APAGAR then
             SCRIPT_ACTIVO = false
-            for _, con in ipairs(conexiones) do con:Disconnect() end
+            for _, con in ipairs(conexiones) do if con then con:Disconnect() end end
             for _, conCh in pairs(conexionesPersonajes) do conCh:Disconnect() end
             
-            -- FIX 3: Resetear todo por completo sin dejar la cabeza agrandada ni transparecias rotas
             for head, stock in pairs(registros) do
                 if head and head:IsDescendantOf(workspace) then
-                    head.Size = stock.size
-                    head.CanCollide = stock.canCollide
-                    head.CanTouch = true
-                    head.Massless = false
-                    head.Transparency = stock.transp
-                    for d, t in pairs(stock.decals) do if d and d.Parent then d.Transparency = t end end
+                    -- OPTIMIZACIÓN: Manejo de Errores con pcalls
+                    pcall(function() head.Size = stock.size end)
+                    pcall(function() head.CanCollide = stock.canCollide end)
+                    pcall(function() head.CanTouch = true end)
+                    pcall(function() head.Massless = false end)
+                    pcall(function() head.Transparency = stock.transp end)
+                    for d, t in pairs(stock.decals) do 
+                        if d and d.Parent then 
+                            pcall(function() d.Transparency = t end) 
+                        end 
+                    end
                 end
-                if stock.collider then stock.collider:Destroy() end
-                if stock.fake then stock.fake:Destroy() end
+                if stock.collider then pcall(function() stock.collider:Destroy() end) end
+                if stock.fake then pcall(function() stock.fake:Destroy() end) end
             end
             
             for _, list in pairs(conexionesEscudo) do
